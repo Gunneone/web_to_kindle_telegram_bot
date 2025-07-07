@@ -3,7 +3,10 @@ import logging
 from dotenv import load_dotenv
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes, ConversationHandler, MessageHandler, filters
+
+from src.email_sender import send_email
 from web_scraper import get_substack_content
+from epub_converter import convert_to_epub
 from sqlalchemy import create_engine, Column, Integer, String
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
@@ -14,8 +17,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Conversation states
-EMAIL = 0
+# Add at the top of the file with other states
+EMAIL, WAITING_FOR_LINK = range(2)
+
 
 # Database setup
 Base = declarative_base()
@@ -79,18 +83,38 @@ async def process_email(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def send(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle the /send command."""
     await update.message.reply_text('Please provide the Substack article link:')
+    return WAITING_FOR_LINK
 
 
 async def process_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Process the Substack link."""
     url = update.message.text
     try:
+        # send typing chat action
+        await context.bot.send_chat_action(update.effective_chat.id, 'typing')
         content = get_substack_content(url)
         logger.info(f"Successfully retrieved content from URL: {url}")
-        await update.message.reply_text('Content retrieved successfully!')
+
+        ebook=convert_to_epub(content)
+        logger.info("Successfully converted content to EPUB")
+
+        session = Session()
+        user = session.query(User).filter_by(user_id=update.effective_user.id).first()
+        session.close()
+
+        if not user or not user.kindle_email:
+            raise Exception("Please configure your Kindle email first using /config")
+
+        send_email(user.kindle_email, ebook)
+        logger.info("Successfully sent EPUB to Kindle")
+
+        await update.message.reply_text('Article has been sent to your Kindle!')
     except Exception as e:
         logger.error(f"Error processing URL {url}: {str(e)}")
+        # print full stack trace
+        logger.exception(e)
         await update.message.reply_text(f'Error: {str(e)}')
+    return ConversationHandler.END
 
 
 def main():
@@ -100,18 +124,25 @@ def main():
 
     application = Application.builder().token(TOKEN).build()
 
-    # Add conversation handler for email collection
+    # In the main function, modify the conversation handler:
     conv_handler = ConversationHandler(
-        entry_points=[CommandHandler('config', config)],
+        entry_points=[
+            CommandHandler('config', config),
+            CommandHandler('send', send)
+        ],
         states={
             EMAIL: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_email)],
+            WAITING_FOR_LINK: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_link)]
         },
-        fallbacks=[],
+        fallbacks=[
+            CommandHandler("start", start),
+            CommandHandler("send", send),
+            CommandHandler("config", config),
+        ],
     )
 
     application.add_handler(conv_handler)
     application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("send", send))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, process_link))
 
     # Start the bot
