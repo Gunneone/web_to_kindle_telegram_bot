@@ -1,5 +1,6 @@
 import os
 import logging
+from datetime import datetime
 from dotenv import load_dotenv
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes, ConversationHandler, MessageHandler, filters
@@ -31,6 +32,7 @@ class User(Base):
     __tablename__ = 'users'
     user_id = Column(Integer, primary_key=True)
     kindle_email = Column(String)
+    last_book_received_date = Column(String)
 
 
 # Load environment variables
@@ -81,14 +83,21 @@ async def process_email(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def send(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle the /send command."""
+
+
+    """Handle the /send command. If URL is provided with command, process it directly."""
+    if context.args and len(context.args) > 0:
+        url = context.args[0]
+        await process_link(update, context)
+        return ConversationHandler.END
+
     await update.message.reply_text('Please provide the Substack article link:')
     return WAITING_FOR_LINK
 
 
 async def process_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Process the Substack link."""
-    url = update.message.text
+    url = context.args[0] if context.args else update.message.text
     try:
         # send typing chat action
         await context.bot.send_chat_action(update.effective_chat.id, 'typing')
@@ -107,6 +116,13 @@ async def process_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         send_email(user.kindle_email, ebook)
         logger.info("Successfully sent EPUB to Kindle")
+
+        # Update last book received date
+        session = Session()
+        user = session.query(User).filter_by(user_id=update.effective_user.id).first()
+        user.last_book_received_date = datetime.now().isoformat()
+        session.commit()
+        session.close()
 
         await update.message.reply_text('Article has been sent to your Kindle!')
     except Exception as e:
