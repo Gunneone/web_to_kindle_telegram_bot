@@ -140,7 +140,7 @@ def convert_to_epub(article: Article) -> str:
     os.makedirs(article_dir, exist_ok=True)
 
     # Add cover
-    cover_path = './Substack Logo.png'
+    cover_path = './substack-logo.png'
     if os.path.exists(cover_path):
         with open(cover_path, 'rb') as cover_file:
             book.set_cover('cover.png', cover_file.read())
