@@ -1,0 +1,10 @@
+version: '3.8'
+
+services:
+  bot:
+    build: .
+    restart: always
+    environment:
+      - TZ=UTC  # Set your timezone if needed
+    volumes:
+      - .env:/app/.env:ro  # Mount .env file as read-only
