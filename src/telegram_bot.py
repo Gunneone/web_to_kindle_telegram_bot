@@ -9,8 +9,7 @@ from src.email_sender import send_email
 from web_scraper import get_substack_content
 from epub_converter import convert_to_epub
 from sqlalchemy import create_engine, Column, Integer, String
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker,declarative_base
 
 # Enable logging
 logging.basicConfig(
