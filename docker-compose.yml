@@ -1,0 +1,14 @@
+version: '3.8'
+
+services:
+  bot:
+    build: .
+    container_name: web-to-kindle-bot
+    restart: always
+    environment:
+      - TZ=UTC
+    volumes:
+      - .env:/app/.env:ro  # Mount .env file as read-only
+      - bot_data:/app/html  # Persistent volume for HTML files
+volumes:
+  bot_data:    # Define the named volume
