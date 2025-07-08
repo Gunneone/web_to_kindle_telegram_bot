@@ -142,7 +142,7 @@ def convert_to_epub(article: Article) -> str:
         logger.warning(f"Cover image not found at: {cover_path}")
 
     # Process images and update HTML content
-    images_dir = os.path.join('../epubs', 'images')
+    images_dir = os.path.join('./epubs', 'images')
     processed_content = process_images(html_content, book, images_dir, title)
 
     # Add content
@@ -157,10 +157,10 @@ def convert_to_epub(article: Article) -> str:
     book.spine = ['cover', 'nav', c]
 
     # Create output directory if it doesn't exist
-    os.makedirs('../epubs', exist_ok=True)
+    os.makedirs('./epubs', exist_ok=True)
 
     # Save EPUB file
-    epub_path = os.path.join('../epubs', f"{title}.epub")
+    epub_path = os.path.join('./epubs', f"{title}.epub")
     logger.debug(f"Saving EPUB to: {epub_path}")
     epub.write_epub(epub_path, book)
     logger.debug("EPUB file saved successfully")
@@ -177,7 +177,7 @@ def convert_to_epub(article: Article) -> str:
             logger.debug("Cleaning up temporary image files")
             # Cleanup images directory
             if os.path.exists(images_dir):
-                # shutil.rmtree(images_dir)
+                shutil.rmtree(images_dir)
                 logger.debug("Image directory cleaned up")
         else:
             logger.warning("No images found in EPUB file! Keeping image directory for inspection")

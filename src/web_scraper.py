@@ -59,7 +59,7 @@ def get_substack_content(url: str):
 
             # Remove share buttons, like buttons etc
             for element in article_content.select(
-                    '.pc-display-flex, .button-wrapper, modal'):
+                    '.pc-display-flex, .button-wrapper, .modal, .popup'):
                 element.decompose()
 
 
