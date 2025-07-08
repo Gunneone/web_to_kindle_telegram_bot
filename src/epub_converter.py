@@ -146,15 +146,15 @@ def convert_to_epub(article: Article) -> str:
     processed_content = process_images(html_content, book, images_dir, title)
 
     # Add content
-    c = epub.EpubHtml(title=title, file_name='content.xhtml', content=processed_content)
-    book.add_item(c)
+    content = epub.EpubHtml(title=title, file_name='content.xhtml', content=processed_content)
+    book.add_item(content)
 
     # Add default NCX and Nav file
     book.add_item(epub.EpubNcx())
     book.add_item(epub.EpubNav())
 
     # Basic spine with cover
-    book.spine = ['cover', 'nav', c]
+    book.spine = ['cover', content]
 
     # Create output directory if it doesn't exist
     os.makedirs('./epubs', exist_ok=True)
