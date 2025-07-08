@@ -59,13 +59,13 @@ def get_substack_content(url: str):
 
             # Remove share buttons, like buttons etc
             for element in article_content.select(
-                    '.pc-display-flex, .button-wrapper'):
+                    '.pc-display-flex, .button-wrapper, modal'):
                 element.decompose()
 
 
             # first store the html file to /html/*current timestamp* for debugging purposes
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            with open(f"../html/{timestamp}.html", "w") as f:
+            with open(f"./html/{timestamp}.html", "w") as f:
                 f.write(str(article_content))
 
             # create Article object with article_content, title and author
