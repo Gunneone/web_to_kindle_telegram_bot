@@ -13,9 +13,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def download_image(url: str, images_dir: str, article_title: str, index: int) -> tuple:
-
-
+def download_image(url: str, images_dir: str, article_title: str) -> tuple:
     """Download image from URL and save it locally"""
     logger.debug(f"Attempting to download image from: {url}")
     try:
@@ -23,17 +21,19 @@ def download_image(url: str, images_dir: str, article_title: str, index: int) ->
         logger.debug(f"HTTP Status Code: {response.status_code}")
 
         if response.status_code == 200:
-            # Generate safe filename from title and index
-            safe_title = "".join(x for x in article_title if x.isalnum() or x in (' ', '-', '_')).strip()
             content_type = response.headers.get('content-type', 'image/jpeg')
-            ext_map = {
-                'image/jpeg': '.jpg',
-                'image/png': '.png',
-                'image/gif': '.gif',
-                'image/webp': '.webp'
-            }
-            image_ext = ext_map.get(content_type, '.jpg')
-            image_name = f"{safe_title}_{index}{image_ext}"
+
+            original_filename = url.split('%2F')[-1].split('?')[0]  # Get filename without query params
+            if not original_filename:
+                ext_map = {
+                    'image/jpeg': '.jpg',
+                    'image/png': '.png',
+                    'image/gif': '.gif',
+                    'image/webp': '.webp'
+                }
+                image_ext = ext_map.get(content_type, '.jpg')
+                original_filename = f"image{image_ext}"
+            image_name = original_filename
             image_path = os.path.join(images_dir, image_name)
             logger.debug(f"Saving image to: {image_path}")
 
@@ -71,7 +71,7 @@ def process_images(html_content: str, book: epub.EpubBook, images_dir: str, arti
             logger.debug(f"Processing image {processed_count + 1}/{img_count}")
             logger.debug(f"Image source: {img['src']}")
 
-            image_result = download_image(img['src'], images_dir, article_title, processed_count + 1)
+            image_result = download_image(img['src'], images_dir, article_title)
             image_name, media_type, image_content = image_result
             if image_name and media_type and image_content:
                 try:
@@ -131,6 +131,13 @@ def convert_to_epub(article: Article) -> str:
     book.set_title(title)
     book.set_language('en')
     book.add_author(author)
+    
+    # Create output directory if it doesn't exist
+    os.makedirs('./epubs', exist_ok=True)
+    # Create article-specific subfolder
+    safe_dirname = title.lower().replace(' ', '-')[:70]
+    article_dir = os.path.join('./epubs', safe_dirname)
+    os.makedirs(article_dir, exist_ok=True)
 
     # Add cover
     cover_path = './Substack Logo.png'
@@ -142,8 +149,8 @@ def convert_to_epub(article: Article) -> str:
         logger.warning(f"Cover image not found at: {cover_path}")
 
     # Process images and update HTML content
-    images_dir = os.path.join('./epubs', 'images')
-    processed_content = process_images(html_content, book, images_dir, title)
+
+    processed_content = process_images(html_content, book, article_dir, title)
 
     # Add content
     content = epub.EpubHtml(title=title, file_name='content.xhtml', content=processed_content)
@@ -153,14 +160,12 @@ def convert_to_epub(article: Article) -> str:
     book.add_item(epub.EpubNcx())
     book.add_item(epub.EpubNav())
 
-    # Basic spine with cover
-    book.spine = ['cover', content]
-
-    # Create output directory if it doesn't exist
-    os.makedirs('./epubs', exist_ok=True)
+    # Basic spine without cover
+    book.spine = [content]
 
     # Save EPUB file
-    epub_path = os.path.join('./epubs', f"{title}.epub")
+    article_dir = os.path.join('./epubs', safe_dirname)
+    epub_path = os.path.join(article_dir, f"{title}.epub")
     logger.debug(f"Saving EPUB to: {epub_path}")
     epub.write_epub(epub_path, book)
     logger.debug("EPUB file saved successfully")
@@ -176,11 +181,18 @@ def convert_to_epub(article: Article) -> str:
         if len(image_items) > 0:
             logger.debug("Cleaning up temporary image files")
             # Cleanup images directory
-            if os.path.exists(images_dir):
-                shutil.rmtree(images_dir)
-                logger.debug("Image directory cleaned up")
+            for filename in os.listdir(article_dir):
+                filepath = os.path.join(article_dir, filename)
+                if os.path.isfile(filepath) and any(
+                        filepath.lower().endswith(ext) for ext in ['.jpg', '.jpeg', '.png', '.gif', '.webp']):
+                    try:
+                        os.remove(filepath)
+                        logger.debug(f"Removed temporary image file: {filename}")
+                    except Exception as e:
+                        logger.error(f"Failed to remove image file {filename}: {str(e)}")
+            logger.info("EPUB file contents verified successfully and temporary images removed.")
         else:
-            logger.warning("No images found in EPUB file! Keeping image directory for inspection")
+            logger.info("No images found in EPUB file!")
     except Exception as e:
         logger.error(f"Failed to verify EPUB contents: {str(e)}")
         logger.warning("Keeping image directory for inspection")

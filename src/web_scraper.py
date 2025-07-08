@@ -43,29 +43,38 @@ def get_substack_content(url: str):
 
         if article_content:
 
+            # extract author
+            author_element = soup.find('div', class_='profile-hover-card-target')
+            author = author_element.find('a').text.strip() if author_element else "Unknown Author"
+
             # extract title which is the first h1, that is not in a .pc-display-flex element
             h1_elements = soup.find_all('h1')
             title = None
             for h1 in h1_elements:
                 if not h1.find_parent(class_='pc-display-flex'):
                     title = h1.text.strip()
+
+                    # Create and insert author heading and horizontal line after title
+                    author_heading = soup.new_tag('h4')
+                    author_heading.string = f"By {author}"
+                    horizontal_line = soup.new_tag('hr')
+                    horizontal_line['style'] = 'border-top: 1px solid #ccc; margin: 20px 0;'
+
+                    h1.insert_after(horizontal_line)
+                    h1.insert_after(author_heading)
                     break
             if not title:
                 title = "Unknown Title"
-
-            # extract author
-            author_element = soup.find('div', class_='profile-hover-card-target')
-            author = author_element.find('a').text.strip() if author_element else "Unknown Author"
 
             # Remove share buttons, like buttons etc
             for element in article_content.select(
                     '.pc-display-flex, .button-wrapper, .modal, .popup'):
                 element.decompose()
 
-
+            safe_title = title.lower().replace(' ', '-')[:70]
             # first store the html file to /html/*current timestamp* for debugging purposes
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            with open(f"./html/{timestamp}.html", "w") as f:
+            with open(f"./html/{safe_title}-{timestamp}.html", "w") as f:
                 f.write(str(article_content))
 
             # create Article object with article_content, title and author
