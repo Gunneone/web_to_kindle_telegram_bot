@@ -6,11 +6,9 @@ from ebooklib import epub
 
 from src.web_scraper import Article
 
-# TODO: Make pictures work in epub
-
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.DEBUG
+    level=logging.INFO
 )
 logger = logging.getLogger(__name__)
 
@@ -134,6 +132,15 @@ def convert_to_epub(article: Article) -> str:
     book.set_language('en')
     book.add_author(author)
 
+    # Add cover
+    cover_path = '../Substack Logo.png'
+    if os.path.exists(cover_path):
+        with open(cover_path, 'rb') as cover_file:
+            book.set_cover('cover.png', cover_file.read())
+            logger.debug("Added cover image to EPUB")
+    else:
+        logger.warning(f"Cover image not found at: {cover_path}")
+
     # Process images and update HTML content
     images_dir = os.path.join('../epubs', 'images')
     processed_content = process_images(html_content, book, images_dir, title)
@@ -146,8 +153,8 @@ def convert_to_epub(article: Article) -> str:
     book.add_item(epub.EpubNcx())
     book.add_item(epub.EpubNav())
 
-    # Basic spine
-    book.spine = ['nav', c]
+    # Basic spine with cover
+    book.spine = ['cover', 'nav', c]
 
     # Create output directory if it doesn't exist
     os.makedirs('../epubs', exist_ok=True)

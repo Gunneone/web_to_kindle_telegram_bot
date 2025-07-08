@@ -57,9 +57,9 @@ def get_substack_content(url: str):
             author_element = soup.find('div', class_='profile-hover-card-target')
             author = author_element.find('a').text.strip() if author_element else "Unknown Author"
 
-            # Remove share buttons, like buttons, comment sections etc
+            # Remove share buttons, like buttons etc
             for element in article_content.select(
-                    '.pc-display-flex'):
+                    '.pc-display-flex, .button-wrapper'):
                 element.decompose()
 
 
