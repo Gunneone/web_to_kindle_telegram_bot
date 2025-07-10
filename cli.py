@@ -2,7 +2,7 @@ import click
 from dotenv import load_dotenv
 import os
 import logging
-from src.web_scraper import get_substack_content
+from src.web_scraper import get_website_content
 from src.epub_converter import convert_to_epub
 from src.email_sender import send_email
 
@@ -19,12 +19,12 @@ def main(url):
     """Convert Substack article to EPUB and send to Kindle."""
     try:
         logger.info(f"Processing URL: {url}")
-        content = get_substack_content(url)
+        content = get_website_content(url)
         logger.info("Successfully retrieved content from URL")
         ebook = convert_to_epub(content)
         logger.info("Successfully converted content to EPUB")
         kindle_email = 'amazon_42RbqL@kindle.com'  # Replace with actual default email
-        send_email(kindle_email, ebook)
+        send_email(kindle_email,ebook)
         logger.info("Successfully sent EPUB to Kindle")
         click.echo('Article has been sent to your Kindle!')
     except Exception as e:

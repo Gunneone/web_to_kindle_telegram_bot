@@ -22,9 +22,13 @@ def download_image(url: str, images_dir: str, article_title: str) -> tuple:
 
         if response.status_code == 200:
             content_type = response.headers.get('content-type', 'image/jpeg')
-
-            original_filename = url.split('%2F')[-1].split('?')[0]  # Get filename without query params
-            if not original_filename:
+            
+            # Generate a safe filename from the last part of the URL
+            url_parts = url.split('/')
+            original_filename = url_parts[-1].split('?')[0]  # Remove query parameters
+            
+            # If filename is empty or invalid, generate one
+            if not original_filename or original_filename.startswith('http'):
                 ext_map = {
                     'image/jpeg': '.jpg',
                     'image/png': '.png',
@@ -32,9 +36,12 @@ def download_image(url: str, images_dir: str, article_title: str) -> tuple:
                     'image/webp': '.webp'
                 }
                 image_ext = ext_map.get(content_type, '.jpg')
-                original_filename = f"image{image_ext}"
-            image_name = original_filename
+                original_filename = f"image_{hash(url)}{image_ext}"
+            
+            # Clean up the filename to remove any special characters
+            image_name = ''.join(c for c in original_filename if c.isalnum() or c in '._-')
             image_path = os.path.join(images_dir, image_name)
+            
             logger.debug(f"Saving image to: {image_path}")
 
             with open(image_path, 'wb') as f:
@@ -140,13 +147,13 @@ def convert_to_epub(article: Article) -> str:
     os.makedirs(article_dir, exist_ok=True)
 
     # Add cover
-    cover_path = './substack-logo.png'
-    if os.path.exists(cover_path):
-        with open(cover_path, 'rb') as cover_file:
-            book.set_cover('cover.png', cover_file.read())
-            logger.debug("Added cover image to EPUB")
-    else:
-        logger.warning(f"Cover image not found at: {cover_path}")
+    #cover_path = './substack-logo.png'
+    #if os.path.exists(cover_path):
+    #    with open(cover_path, 'rb') as cover_file:
+    #        book.set_cover('cover.png', cover_file.read())
+    #        logger.debug("Added cover image to EPUB")
+    #else:
+    #    logger.warning(f"Cover image not found at: {cover_path}")
 
     # Process images and update HTML content
 

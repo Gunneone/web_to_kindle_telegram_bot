@@ -1,6 +1,15 @@
 import requests
 from bs4 import BeautifulSoup
 from datetime import datetime
+import logging
+from readability import Document
+
+logging.basicConfig(
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
+logger = logging.getLogger(__name__)
+
 
 class Article:
     def __init__(self, url, title, author, published_at, content):
@@ -14,8 +23,77 @@ class Article:
         return getattr(self, key)
     def __setitem__(self, key, value):
         return setattr(self, key, value)
+
+
+def get_website_content(url: str) -> Article:
+    """
+    Determines if URL is a Substack page and extracts content accordingly.
+
+    Args:
+        url (str): The URL to process
+
+    Returns:
+        Article: Article object containing extracted content
+    """
+    if 'substack.com' in url.lower():
+        return get_substack_content(url)
+    else:
+        return get_generic_content(url)
+
+
+def get_generic_content(url: str) -> Article:
+    """
+    Extracts content from a generic webpage using trafilatura.
+
+    Args:
+        url (str): The URL to process
+
+    Returns:
+        Article: Article object containing extracted content
+    """
+    try:
         
-def get_substack_content(url: str):
+        headers = {'User-Agent': 'Mozilla/5.0'}  # Important!
+        response = requests.get(url, headers=headers)
+        if response.status_code == 200:
+            doc = Document(response.text)
+            content = doc.summary()
+            title = doc.title()
+
+            if content:
+                logger.info("Content extracted using readability")
+
+                safe_title = title.lower().replace(' ', '-')[:70]
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+                with open(f"./html/{safe_title}-{timestamp}.html", "w", encoding='utf-8') as f:
+                    f.write(content)
+
+                # Parse metadata from HTML
+                soup = BeautifulSoup(response.text, 'html.parser')
+                author = soup.find('meta', {'name': 'author'})
+                author = author['content'] if author else "Unknown Author"
+
+                published = soup.find('meta', {'property': 'article:published_time'})
+                published = published['content'] if published else datetime.now().isoformat()
+
+                return Article(
+                    url=url,
+                    title=title,
+                    author=author,
+                    published_at=published,
+                    content=content
+                )
+            else:
+                logger.error("Readability failed to extract content")
+                raise Exception("Sorry, content extraction failed for this URL")
+
+    except Exception as e:
+        logger.error(f"Error extracting content: {str(e)}")
+        raise Exception(f"Error extracting content: {str(e)}")
+
+
+def get_substack_content(url: str) -> Article:
     """
     Extracts the main article content from a Substack blog post URL.
 
@@ -38,8 +116,6 @@ def get_substack_content(url: str):
 
         # Find the main article content by looking for the article class
         article_content = soup.find('article')
-
-        
 
         if article_content:
 
@@ -78,6 +154,7 @@ def get_substack_content(url: str):
                 f.write(str(article_content))
 
             # create Article object with article_content, title and author
+            logger.info("Content extracted using Substack Extractor")
             article = Article(
                 url=url,
                 title=title,

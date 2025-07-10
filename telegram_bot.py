@@ -6,7 +6,7 @@ from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes, ConversationHandler, MessageHandler, filters
 
 from src.email_sender import send_email
-from src.web_scraper import get_substack_content
+from src.web_scraper import get_website_content
 from src.epub_converter import convert_to_epub
 from sqlalchemy import create_engine, Column, Integer, String
 from sqlalchemy.orm import sessionmaker,declarative_base
@@ -100,7 +100,7 @@ async def process_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         # send typing chat action
         await context.bot.send_chat_action(update.effective_chat.id, 'typing')
-        content = get_substack_content(url)
+        content = get_website_content(url)
         logger.info(f"Successfully retrieved content from URL: {url}")
 
         ebook=convert_to_epub(content)
