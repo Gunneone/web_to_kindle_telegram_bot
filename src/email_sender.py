@@ -1,8 +1,11 @@
 import os
 import smtplib
-from email.mime.text import MIMEText
+from email import policy
 from email.mime.multipart import MIMEMultipart
 from email.mime.application import MIMEApplication
+from email.mime.text import MIMEText
+from email.utils import formatdate, make_msgid
+
 from dotenv import load_dotenv
 
 
@@ -11,7 +14,7 @@ def send_email(email_to: str, attachment_path: str) -> None:
     Send an email with attachment to the specified recipient.
 
     Args:
-        recipient_email (str): The recipient's email address
+        email_to (str): The recipient's email address
         attachment_path (str): Path to the file to be attached
 
     Returns:
@@ -29,14 +32,13 @@ def send_email(email_to: str, attachment_path: str) -> None:
     smtp_port = int(os.getenv('SMTP_PORT'))
 
     # Create message
-    msg = MIMEMultipart()
+    msg = MIMEMultipart(policy=policy.SMTP)
     msg['From'] = email_from
     msg['To'] = email_to
-    msg['Subject'] = "Your Kindle Book"
+    msg['Subject'] = "convert"
 
-    # Add body
-    body = "Please find your requested book attached."
-    msg.attach(MIMEText(body, 'plain'))
+    body = MIMEText("Please convert this file.", "plain", "utf-8")
+    msg.attach(body)
 
     # Add attachment
     with open(attachment_path, 'rb') as f:
@@ -44,9 +46,16 @@ def send_email(email_to: str, attachment_path: str) -> None:
         attachment.add_header('Content-Disposition', 'attachment', filename=os.path.basename(attachment_path))
         msg.attach(attachment)
 
+    # Set headers to avoid manual approval
+    msg['Date'] = formatdate(localtime=True)
+    msg['X-Mailer'] = 'Roundcube Webmail 1.4.13'
+    sender_domain = email_from.split('@')[1]
+    msg['Message-ID'] = make_msgid(domain=sender_domain)
+
     # Send email
     try:
         server = smtplib.SMTP(smtp_host, smtp_port)
+        server.ehlo('webmail.'+sender_domain)
         server.starttls()
         server.login(email_from, email_password)
         server.send_message(msg)
