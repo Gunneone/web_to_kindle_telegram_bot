@@ -8,7 +8,5 @@ services:
     environment:
       - TZ=UTC
     volumes:
+      - .:/app  # Bind mount for application code
       - .env:/app/.env:ro  # Mount .env file as read-only
-      - bot_data:/app/html  # Persistent volume for HTML files
-volumes:
-  bot_data:    # Define the named volume

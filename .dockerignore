@@ -3,3 +3,8 @@
 __pycache__
 *.pyc
 .idea
+.html
+.png
+.jpg
+.jpeg
+.epub
