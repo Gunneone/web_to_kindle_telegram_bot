@@ -115,6 +115,8 @@ async def process_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await context.bot.send_chat_action(update.effective_chat.id, 'typing')
         logger.info(f"Processing URL: {url}")
         content = get_website_content(url)
+        if not content:
+            raise Exception("Failed to retrieve content from URL")
         logger.info(f"Successfully retrieved content from URL: {url}")
 
         ebook=convert_to_epub(content)
@@ -133,7 +135,7 @@ async def process_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
         username = update.effective_user.username or f"ID:{update.effective_user.id}"
         logger.info(f"Successfully sent EPUB '{content.Title}' to Kindle for user {username}")
 
-# Update last book received date
+        # Update last book received date
         session = Session()
         user = session.query(User).filter_by(user_id=update.effective_user.id).first()
         user.last_book_received_date = datetime.now().isoformat()
@@ -145,7 +147,7 @@ async def process_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"Error processing URL {url}: {str(e)}")
         # print full stack trace
         logger.exception(e)
-        await update.message.reply_text(f'Error: {str(e)}')
+        await update.message.reply_text(f'Sorry, I couldn\'t retrieve your article for some reason. Maybe write the dev to investigate.')
     return ConversationHandler.END
 
 

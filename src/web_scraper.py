@@ -96,6 +96,9 @@ def get_generic_content(url: str) -> Article | None:
             else:
                 logger.error("Readability failed to extract content")
                 raise Exception("Sorry, content extraction failed for this URL")
+        else:
+            logger.error(f"HTTP Status Code: {response.status_code}")
+            raise Exception(f"HTTP Status Code: {response.status_code}")
 
     except Exception as e:
         logger.error(f"Error extracting content: {str(e)}")
