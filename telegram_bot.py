@@ -4,6 +4,7 @@ from datetime import datetime
 from dotenv import load_dotenv
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes, ConversationHandler, MessageHandler, filters
+import validators
 
 from src.email_sender import send_email
 from src.web_scraper import get_website_content
@@ -18,8 +19,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Add at the top of the file with other states
-EMAIL, WAITING_FOR_LINK = range(2)
-
+EMAIL = 0
 
 # Database setup
 Base = declarative_base()
@@ -41,57 +41,70 @@ TOKEN = os.getenv('TELEGRAM_TOKEN')
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Send a message when the command /start is issued."""
+    logger.info(f"User {update.effective_user.id} started the bot")
     await update.message.reply_text(
-        'Hi! Use /config to set up your Kindle email. Afterwards use /send to process a Substack article.')
+        'Hi! Use /config to set up your Kindle email. Afterwards just send me any article link to process.')
 
 
 async def config(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Start the email collection process."""
     user_id = update.effective_user.id
+    logger.debug(f"User {user_id} started email configuration")
     session = Session()
     user = session.query(User).filter_by(user_id=user_id).first()
     message = 'Please enter your Kindle email address:'
     if user and user.kindle_email:
         message = f'Your current Kindle email is: {user.kindle_email}\nEnter a new email to update:'
+        logger.debug(f"User {user_id} has existing email: {user.kindle_email}")
     session.close()
     await update.message.reply_text(message)
+    logger.debug(f"User {user_id} entering EMAIL state")
     return EMAIL
 
+async def is_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Check if the input is a URL."""
+    text = update.message.text
+    user_id = update.effective_user.id
+    if validators.url(text):
+        logger.debug(f"Received URL instead of email from user {user_id}")
+        return True
+    else:
+        return False
 
 async def process_email(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Process the received email and provide further instructions."""
-    email = update.message.text
-    if not email.endswith('@kindle.com'):
-        logger.error(f"Invalid email format provided: {email}")
-        await update.message.reply_text('Please provide a valid Kindle email address (ending with @kindle.com)')
-        return EMAIL
+    text = update.message.text
     user_id = update.effective_user.id
+
+
+    if not text.endswith('@kindle.com'):
+        # Check if the input looks like a URL
+        if is_url(update, context):
+            logger.debug(f"Received URL instead of email from user {user_id}")
+            return await process_link(update, context)
+        else:
+            logger.debug(f"Invalid email format provided by user {user_id}: {text}")
+            await update.message.reply_text('Please provide a valid Kindle email address (ending with @kindle.com)')
+            return EMAIL
+
+    logger.info(f"Processing email from user {user_id}: {text}")
+
+
     session = Session()
     user = session.query(User).filter_by(user_id=user_id).first()
     if not user:
+        logger.info(f"Creating new user record for user {user_id}")
         user = User(user_id=user_id)
-    user.kindle_email = email
+    user.kindle_email = text
     session.add(user)
     session.commit()
     session.close()
-    logger.info(f"Email successfully configured for user {user_id}: {email}")
-    await update.message.reply_text(
-        f'Thank you! Now please add to_kindle@gunneone.de to your approved sender list in your Kindle settings.'
-    )
+    logger.info(f"Email successfully configured for user {user_id}: {text}")
+
+    response = 'Thank you! Now please add to_kindle@gunneone.de to your approved sender list in your Kindle settings.'
+    await update.message.reply_text(response)
+    logger.info(f"User {user_id} completed email configuration")
     return ConversationHandler.END
-
-
-async def send(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
-
-    """Handle the /send command. If URL is provided with command, process it directly."""
-    if context.args and len(context.args) > 0:
-        url = context.args[0]
-        await process_link(update, context)
-        return ConversationHandler.END
-
-    await update.message.reply_text('Please provide the Substack article link:')
-    return WAITING_FOR_LINK
 
 
 async def process_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -100,6 +113,7 @@ async def process_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         # send typing chat action
         await context.bot.send_chat_action(update.effective_chat.id, 'typing')
+        logger.info(f"Processing URL: {url}")
         content = get_website_content(url)
         logger.info(f"Successfully retrieved content from URL: {url}")
 
@@ -114,9 +128,12 @@ async def process_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
             raise Exception("Please configure your Kindle email first using /config")
 
         send_email(user.kindle_email, ebook)
-        logger.info("Successfully sent EPUB to Kindle")
 
-        # Update last book received date
+
+        username = update.effective_user.username or f"ID:{update.effective_user.id}"
+        logger.info(f"Successfully sent EPUB '{content.Title}' to Kindle for user {username}")
+
+# Update last book received date
         session = Session()
         user = session.query(User).filter_by(user_id=update.effective_user.id).first()
         user.last_book_received_date = datetime.now().isoformat()
@@ -142,16 +159,13 @@ def main():
     # In the main function, modify the conversation handler:
     conv_handler = ConversationHandler(
         entry_points=[
-            CommandHandler('config', config),
-            CommandHandler('send', send)
+            CommandHandler('config', config)
         ],
         states={
-            EMAIL: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_email)],
-            WAITING_FOR_LINK: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_link)]
+            EMAIL: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_email)]
         },
         fallbacks=[
             CommandHandler("start", start),
-            CommandHandler("send", send),
             CommandHandler("config", config),
         ],
     )

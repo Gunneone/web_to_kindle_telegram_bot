@@ -3,6 +3,7 @@ from bs4 import BeautifulSoup
 from datetime import datetime
 import logging
 from readability import Document
+import os
 
 logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s',
@@ -41,9 +42,9 @@ def get_website_content(url: str) -> Article:
         return get_generic_content(url)
 
 
-def get_generic_content(url: str) -> Article:
+def get_generic_content(url: str) -> Article | None:
     """
-    Extracts content from a generic webpage using trafilatura.
+    Extracts content from a generic webpage using readability-lxml.
 
     Args:
         url (str): The URL to process
@@ -51,9 +52,9 @@ def get_generic_content(url: str) -> Article:
     Returns:
         Article: Article object containing extracted content
     """
+    logger.info(f"Processing URL using readability-lxml: {url}... ")
     try:
-        
-        headers = {'User-Agent': 'Mozilla/5.0'}  # Important!
+        headers = {'User-Agent': 'Mozilla/5.0'}
         response = requests.get(url, headers=headers)
         if response.status_code == 200:
             doc = Document(response.text)
@@ -63,10 +64,18 @@ def get_generic_content(url: str) -> Article:
             if content:
                 logger.info("Content extracted using readability")
 
-                safe_title = title.lower().replace(' ', '-')[:70]
+                # Create safe filename by removing special characters
+                safe_title = ''.join(c for c in title.lower() if c.isalnum() or c in ' -_')
+                safe_title = safe_title.replace(' ', '-')[:70]
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
-                with open(f"./html/{safe_title}-{timestamp}.html", "w", encoding='utf-8') as f:
+                # Ensure html directory exists
+                os.makedirs('./html', exist_ok=True)
+                
+                # Use os.path.join for proper path handling
+                file_path = os.path.join('./html', f"{safe_title}-{timestamp}.html")
+                
+                with open(file_path, "w", encoding='utf-8') as f:
                     f.write(content)
 
                 # Parse metadata from HTML
@@ -92,7 +101,6 @@ def get_generic_content(url: str) -> Article:
         logger.error(f"Error extracting content: {str(e)}")
         raise Exception(f"Error extracting content: {str(e)}")
 
-
 def get_substack_content(url: str) -> Article:
     """
     Extracts the main article content from a Substack blog post URL.
@@ -106,6 +114,7 @@ def get_substack_content(url: str) -> Article:
     Raises:
         Exception: If the URL is invalid or content cannot be retrieved
     """
+    logger.info(f"Processing URL using Substack Extractor: {url}... ")
     try:
         # Send HTTP GET request
         response = requests.get(url)
@@ -147,10 +156,18 @@ def get_substack_content(url: str) -> Article:
                     '.pc-display-flex, .button-wrapper, .modal, .popup'):
                 element.decompose()
 
-            safe_title = title.lower().replace(' ', '-')[:70]
-            # first store the html file to /html/*current timestamp* for debugging purposes
+            # Create safe filename
+            safe_title = ''.join(c for c in title.lower() if c.isalnum() or c in ' -_')
+            safe_title = safe_title.replace(' ', '-')[:70]
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            with open(f"./html/{safe_title}-{timestamp}.html", "w") as f:
+
+            # Ensure html directory exists
+            os.makedirs('./html', exist_ok=True)
+            
+            # Use os.path.join for proper path handling
+            file_path = os.path.join('./html', f"{safe_title}-{timestamp}.html")
+            
+            with open(file_path, "w", encoding='utf-8') as f:
                 f.write(str(article_content))
 
             # create Article object with article_content, title and author
