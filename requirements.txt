@@ -6,3 +6,4 @@ SQLAlchemy~=2.0.38
 EbookLib~=0.19
 click~=8.2.1
 readability-lxml
+validators
