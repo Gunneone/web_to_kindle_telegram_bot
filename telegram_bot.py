@@ -1,7 +1,9 @@
 import os
+import os.path
 import logging
 from datetime import datetime
 from dotenv import load_dotenv
+from sqlalchemy.sql.expression import update
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes, ConversationHandler, MessageHandler, filters
 import validators
@@ -9,7 +11,7 @@ import validators
 from src.email_sender import send_email
 from src.web_scraper import get_website_content
 from src.epub_converter import convert_to_epub
-from sqlalchemy import create_engine, Column, Integer, String
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, inspect, text
 from sqlalchemy.orm import sessionmaker,declarative_base
 
 # Enable logging
@@ -27,34 +29,79 @@ engine = create_engine('sqlite:///users.db')
 Session = sessionmaker(bind=engine)
 
 
+class Article(Base):
+    __tablename__ = 'articles'
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer)
+    article_url = Column(String)
+    timestamp = Column(DateTime, default=datetime.utcnow)
+    epub_path = Column(String)
+    
+    
 class User(Base):
     __tablename__ = 'users'
     user_id = Column(Integer, primary_key=True)
     kindle_email = Column(String)
+    username = Column(String)
+    first_name = Column(String)
+    last_name = Column(String)
     last_book_received_date = Column(String)
 
 
 # Load environment variables
 load_dotenv()
 TOKEN = os.getenv('TELEGRAM_TOKEN')
+ADMIN_ID = os.getenv('ADMIN_ID')
+
+
+
+async def update_user(user_data, email=None):
+    """Helper function to update or insert user data."""
+    session = Session()
+    user = session.query(User).filter_by(user_id=user_data.id).first()
+    if not user:
+        user = User(
+            user_id=user_data.id,
+            username=user_data.username,
+            first_name=user_data.first_name,
+            last_name=user_data.last_name
+        )
+    else:
+        user.username = user_data.username
+        user.first_name = user_data.first_name
+        user.last_name = user_data.last_name
+    if email:
+        user.kindle_email = email
+    session.add(user)
+    session.commit()
+    session.close()
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Send a message when the command /start is issued."""
     logger.info(f"User {update.effective_user.id} started the bot")
+    await update_user(update.effective_user)
     await update.message.reply_text(
         'Hi! Use /config to set up your Kindle email. Afterwards just send me any article link to process.')
+
+async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Cancel the conversation."""
+    logger.info(f"User {update.effective_user.id} canceled the operation")
+    await update.message.reply_text('Operation canceled.')
+    return ConversationHandler.END
 
 
 async def config(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Start the email collection process."""
     user_id = update.effective_user.id
     logger.debug(f"User {user_id} started email configuration")
+    await update_user(update.effective_user)
     session = Session()
     user = session.query(User).filter_by(user_id=user_id).first()
-    message = 'Please enter your Kindle email address:'
+    message = 'Please enter your Kindle email address.'
     if user and user.kindle_email:
-        message = f'Your current Kindle email is: {user.kindle_email}\nEnter a new email to update:'
+        message = f'Your current Kindle email is: {user.kindle_email}\n\nEnter a new email to update.\nOr /cancel.'
+
         logger.debug(f"User {user_id} has existing email: {user.kindle_email}")
     session.close()
     await update.message.reply_text(message)
@@ -76,7 +123,6 @@ async def process_email(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
     user_id = update.effective_user.id
 
-
     if not text.endswith('@kindle.com'):
         # Check if the input looks like a URL
         if is_url(update, context):
@@ -89,16 +135,7 @@ async def process_email(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     logger.info(f"Processing email from user {user_id}: {text}")
 
-
-    session = Session()
-    user = session.query(User).filter_by(user_id=user_id).first()
-    if not user:
-        logger.info(f"Creating new user record for user {user_id}")
-        user = User(user_id=user_id)
-    user.kindle_email = text
-    session.add(user)
-    session.commit()
-    session.close()
+    await update_user(update.effective_user, text)
     logger.info(f"Email successfully configured for user {user_id}: {text}")
 
     response = 'Thank you! Now please add to_kindle@gunneone.de to your approved sender list in your Kindle settings.'
@@ -131,18 +168,28 @@ async def process_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         send_email(user.kindle_email, ebook)
 
+        # Save article record
+        article = Article(
+            user_id=update.effective_user.id,
+            article_url=url,
+            epub_path=ebook
+        )
+        session = Session()
+        session.add(article)
+        session.commit()
+        session.close()
 
         username = update.effective_user.username or f"ID:{update.effective_user.id}"
         logger.info(f"Successfully sent EPUB '{content.Title}' to Kindle for user {username}")
 
-        # Update last book received date
-        session = Session()
-        user = session.query(User).filter_by(user_id=update.effective_user.id).first()
-        user.last_book_received_date = datetime.now().isoformat()
-        session.commit()
-        session.close()
-
         await update.message.reply_text('Article has been sent to your Kindle!')
+
+        # Notify admin
+        if ADMIN_ID:
+            admin_message = f"Ebook '{content.Title}' sent to {username}."
+            await context.bot.send_message(chat_id=ADMIN_ID, text=admin_message)
+            if os.path.exists(ebook):
+                await context.bot.send_document(chat_id=ADMIN_ID, document=open(ebook, 'rb'))
     except Exception as e:
         logger.error(f"Error processing URL {url}: {str(e)}")
         # print full stack trace
@@ -150,11 +197,21 @@ async def process_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f'Sorry, I couldn\'t retrieve your article for some reason. Maybe write the dev to investigate.')
     return ConversationHandler.END
 
+def check_and_create_columns():
+    """Check if all columns exist and create missing ones."""
+    inspector = inspect(engine)
+    for table in Base.metadata.tables.values():
+        existing_columns = {col['name'] for col in inspector.get_columns(table.name)}
+        for column in table.columns:
+            if column.name not in existing_columns:
+                with engine.begin() as connection:
+                    connection.execute(text(f'ALTER TABLE {table.name} ADD COLUMN {column.name} {column.type}'))
 
 def main():
     """Start the bot."""
     # Initialize database
     Base.metadata.create_all(engine)
+    check_and_create_columns()
 
     application = Application.builder().token(TOKEN).build()
 
@@ -169,6 +226,7 @@ def main():
         fallbacks=[
             CommandHandler("start", start),
             CommandHandler("config", config),
+            CommandHandler("cancel", cancel),
         ],
     )
 
