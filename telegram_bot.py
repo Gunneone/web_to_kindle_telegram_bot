@@ -84,7 +84,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.info(f"User {update.effective_user.id} started the bot")
     await update_user(update.effective_user)
     await update.message.reply_text(
-        'Hi! Use /config to set up your Kindle email. Afterwards just send me any article link to process.')
+        'Hi! Use /config to set up your Kindle email. Use /settings to view all your settings and /imagelinks to toggle image link preservation. Afterwards just send me any article link to process.')
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Cancel the conversation."""

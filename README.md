@@ -9,6 +9,7 @@ A Telegram bot that allows users to scrape Substack articles, convert them to Ki
 - Integrates with a Telegram bot for an intuitive user interface.
 - Sends the EPUB file to the user's Kindle email address.
 - Allows configuration of Kindle email within the bot.
+- **Configurable image link preservation:** Toggle whether to preserve clickable links on images (useful for zoom functionality).
 
 ---
 
@@ -82,12 +83,22 @@ A Telegram bot that allows users to scrape Substack articles, convert them to Ki
 
    Use `/config` to set or update your Kindle email. You will be prompted to input an email address ending in `@kindle.com`.
 
-### 3. **Send an Article:**
+### 3. **Configure Settings:**
+
+   Use `/settings` to view your current configuration, including:
+   - Kindle email address
+   - Image link preservation setting
+
+### 4. **Toggle Image Link Preservation:**
+
+   Use `/imagelinks` to toggle whether clickable links on images are preserved in the EPUB. When enabled, you can click on images to zoom or view full resolution versions.
+
+### 5. **Send an Article:**
 
    Use `/send` followed by a Substack article URL to send content directly to your Kindle. Alternatively:
    - Send `/send` without an URL, and the bot will prompt you to provide a link.
 
-### 4. **Approve the Sender's Email:**
+### 6. **Approve the Sender's Email:**
 
    Add `EMAIL_FROM` (as set in `.env`) to your approved senders list at [Amazon Kindle Settings](https://www.amazon.com/myk).
 
@@ -105,7 +116,29 @@ A Telegram bot that allows users to scrape Substack articles, convert them to Ki
    - The `email_sender.py` sends the generated EPUB to the user's Kindle email via an SMTP server.
 
 4. **Telegram Interface:**
-   - Users interact with the bot using straightforward commands to configure their Kindle email and process Substack articles.
+   - Users interact with the bot using straightforward commands to configure their Kindle email, toggle settings, and process Substack articles.
+
+---
+
+## Bot Commands
+
+- `/start` - Initialize the bot and view welcome message
+- `/config` - Configure or update your Kindle email address  
+- `/settings` - View all current settings (email, image link preservation)
+- `/imagelinks` - Toggle image link preservation on/off
+- `/cancel` - Cancel current operation
+
+## CLI Usage
+
+The CLI tool also supports the preserve image links feature:
+
+```bash
+# Process article with image links preserved
+python cli.py --preserve-image-links https://example.com/article
+
+# Process article with image links removed (default)
+python cli.py https://example.com/article
+```
 ---
 
 ## EPUB Compatibility Notes
