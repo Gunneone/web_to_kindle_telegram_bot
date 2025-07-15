@@ -91,6 +91,29 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 
+async def delete_email(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Delete the user's Kindle email address from the database."""
+    user_id = update.effective_user.id
+    logger.info(f"User {user_id} requested email deletion")
+    
+    session = Session()
+    user = session.query(User).filter_by(user_id=user_id).first()
+    
+    if not user or not user.kindle_email:
+        session.close()
+        await update.message.reply_text('You do not have a Kindle email configured.')
+        return ConversationHandler.END
+    
+    # Set kindle_email to None
+    user.kindle_email = None
+    session.commit()
+    session.close()
+    
+    logger.info(f"Successfully deleted email for user {user_id}")
+    await update.message.reply_text('Your Kindle email address has been removed.')
+    return ConversationHandler.END
+
+
 async def config(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Start the email collection process."""
     user_id = update.effective_user.id
@@ -100,7 +123,7 @@ async def config(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = session.query(User).filter_by(user_id=user_id).first()
     message = 'Please enter your Kindle email address.'
     if user and user.kindle_email:
-        message = f'Your current Kindle email is: {user.kindle_email}\n\nEnter a new email to update.\nOr /cancel.'
+        message = f'Your current Kindle email is: {user.kindle_email}\n\nEnter a new email to update.\nUse /delete to remove your email address.\nOr /cancel.'
 
         logger.debug(f"User {user_id} has existing email: {user.kindle_email}")
     session.close()
@@ -227,11 +250,13 @@ def main():
             CommandHandler("start", start),
             CommandHandler("config", config),
             CommandHandler("cancel", cancel),
+            CommandHandler("delete", delete_email),
         ],
     )
 
     application.add_handler(conv_handler)
     application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("delete", delete_email))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, process_link))
 
     # Start the bot
