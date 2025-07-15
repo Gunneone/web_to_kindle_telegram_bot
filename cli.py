@@ -15,13 +15,14 @@ logger = logging.getLogger(__name__)
 
 @click.command()
 @click.argument('url')
-def main(url):
+@click.option('--preserve-image-links', is_flag=True, default=False, help='Preserve links in images')
+def main(url, preserve_image_links):
     """Convert Substack article to EPUB and send to Kindle."""
     try:
         logger.info(f"Processing URL: {url}")
         content = get_website_content(url)
         logger.info("Successfully retrieved content from URL")
-        ebook = convert_to_epub(content)
+        ebook = convert_to_epub(content, preserve_image_links=preserve_image_links)
         logger.info("Successfully converted content to EPUB")
         kindle_email = 'amazon_42RbqL@kindle.com'  # Replace with actual default email
         send_email(kindle_email,ebook)

@@ -56,7 +56,7 @@ def download_image(url: str, images_dir: str, article_title: str) -> tuple:
         return None, None, None
 
 
-def process_images(html_content: str, book: epub.EpubBook, images_dir: str, article_title: str) -> str:
+def process_images(html_content: str, book: epub.EpubBook, images_dir: str, article_title: str, preserve_image_links: bool = False) -> str:
     """Process HTML content and download images"""
     logger.debug("Starting image processing")
     logger.debug(f"Images directory: {images_dir}")
@@ -78,6 +78,11 @@ def process_images(html_content: str, book: epub.EpubBook, images_dir: str, arti
             logger.debug(f"Processing image {processed_count + 1}/{img_count}")
             logger.debug(f"Image source: {img['src']}")
 
+            # Check if image is wrapped in a link
+            parent_link = img.find_parent('a')
+            if parent_link:
+                logger.debug(f"Found parent link for image: {parent_link.get('href', 'no href')}")
+
             image_result = download_image(img['src'], images_dir, article_title)
             image_name, media_type, image_content = image_result
             if image_name and media_type and image_content:
@@ -98,6 +103,13 @@ def process_images(html_content: str, book: epub.EpubBook, images_dir: str, arti
                     # Update image source in HTML
                     img['src'] = f'images/{image_name}'
                     logger.debug("Updated image source in HTML")
+                    
+                    # If preserve_image_links is disabled and image has a parent link, remove the link
+                    if not preserve_image_links and parent_link:
+                        # Replace the link with just the image
+                        parent_link.replace_with(img)
+                        logger.debug("Removed parent link from image")
+                    
                     processed_count += 1
                 except Exception as e:
                     logger.error(f"Failed to process image {image_name}: {str(e)}")
@@ -112,7 +124,7 @@ def process_images(html_content: str, book: epub.EpubBook, images_dir: str, arti
     return str(soup)
 
 
-def convert_to_epub(article: Article) -> str:
+def convert_to_epub(article: Article, preserve_image_links: bool = False) -> str:
     """
     Convert article content to EPUB format and save it.
 
@@ -157,7 +169,7 @@ def convert_to_epub(article: Article) -> str:
 
     # Process images and update HTML content
 
-    processed_content = process_images(html_content, book, article_dir, title)
+    processed_content = process_images(html_content, book, article_dir, title, preserve_image_links)
 
     # Add content
     content = epub.EpubHtml(title=title, file_name='content.xhtml', content=processed_content)
