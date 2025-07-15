@@ -22,7 +22,7 @@ def main(url, preserve_image_links):
         logger.info(f"Processing URL: {url}")
         content = get_website_content(url)
         logger.info("Successfully retrieved content from URL")
-        ebook = convert_to_epub(content, preserve_image_links=preserve_image_links)
+        ebook = convert_to_epub(content, preserve_image_links)
         logger.info("Successfully converted content to EPUB")
         kindle_email = 'amazon_42RbqL@kindle.com'  # Replace with actual default email
         send_email(kindle_email,ebook)
