@@ -2,8 +2,34 @@
 
 A Telegram bot that allows users to scrape Substack articles, convert them to Kindle-compatible EPUB files, and send them directly to their Kindle devices via email.
 
+## 🚀 Try the Deployed Bot
+
+You can try the bot immediately without any setup at: **[@SubstackKindleBot](https://t.me/SubstackKindleBot)**
+
+Or deploy your own instance using the instructions below.
+
+## Quick Start
+
+### Option 1: Use the Deployed Bot (Easiest)
+1. Visit [@SubstackKindleBot](https://t.me/SubstackKindleBot) on Telegram
+2. Send `/start` to begin
+3. Configure your Kindle email with `/config`
+4. Send any Substack article URL to convert and receive on your Kindle
+
+### Option 2: Use the CLI Tool (For Developers)
+```bash
+git clone https://github.com/gunneone/web-to-kindle-telegram-bot.git
+cd web-to-kindle-telegram-bot
+pip install -r requirements.txt
+python cli.py https://your-substack-article-url
+```
+
+### Option 3: Deploy Your Own Bot
+Follow the full installation instructions below.
+
 ## Features
 
+- **Multiple interfaces:** Use via Telegram bot or command-line interface (CLI)
 - Web scraper to extract Substack article content, removing unnecessary elements like buttons and ads.
 - Converts extracted content to an EPUB format compatible with Kindle devices.
 - Integrates with a Telegram bot for an intuitive user interface.
@@ -130,6 +156,28 @@ A Telegram bot that allows users to scrape Substack articles, convert them to Ki
 
 ## CLI Usage
 
+For users who prefer command-line tools or want to integrate the functionality into scripts, a CLI tool is available:
+
+### Quick Start with CLI
+
+```bash
+# Install dependencies
+pip install -r requirements.txt
+
+# Process a Substack article (basic usage)
+python cli.py https://example.substack.com/p/article-title
+
+# Process article with image links preserved (clickable images)
+python cli.py --preserve-image-links https://example.substack.com/p/article-title
+```
+
+### CLI Features
+
+- **Direct processing:** Convert Substack articles to EPUB without needing a Telegram bot
+- **Image link preservation:** Use `--preserve-image-links` flag to keep clickable links on images
+- **Batch processing capability:** Can be integrated into scripts for multiple articles
+- **Email integration:** Automatically sends EPUB to configured Kindle email
+
 The CLI tool also supports the preserve image links feature:
 
 ```bash
@@ -157,6 +205,9 @@ The following packages are used in this project:
 - **[python-telegram-bot](https://pypi.org/project/python-telegram-bot/):** Telegram API integration.
 - **[python-dotenv](https://pypi.org/project/python-dotenv/):** Managing environment variables.
 - **[SQLAlchemy](https://pypi.org/project/SQLAlchemy/):** Database management using SQLite.
+- **[click](https://pypi.org/project/click/):** Command-line interface framework.
+- **[readability-lxml](https://pypi.org/project/readability-lxml/):** Content extraction and readability improvements.
+- **[validators](https://pypi.org/project/validators/):** URL and data validation.
 
 Install dependencies via:
 
