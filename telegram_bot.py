@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 
 # Add at the top of the file with other states
 EMAIL = 0
+IMAGE_LINKS = 1
 
 # Database setup
 Base = declarative_base()
@@ -46,6 +47,7 @@ class User(Base):
     first_name = Column(String)
     last_name = Column(String)
     last_book_received_date = Column(String)
+    preserve_image_links = Column(Integer, default=0)  # SQLite uses INTEGER for boolean
 
 
 # Load environment variables
@@ -82,7 +84,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.info(f"User {update.effective_user.id} started the bot")
     await update_user(update.effective_user)
     await update.message.reply_text(
-        'Hi! Use /config to set up your Kindle email. Afterwards just send me any article link to process.')
+        'Hi! Use /config to set up your Kindle email. Use /settings to view all your settings and /imagelinks to toggle image link preservation. Afterwards just send me any article link to process.')
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Cancel the conversation."""
@@ -130,6 +132,66 @@ async def config(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(message)
     logger.debug(f"User {user_id} entering EMAIL state")
     return EMAIL
+
+
+async def settings(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Show current settings and allow modification."""
+    user_id = update.effective_user.id
+    logger.debug(f"User {user_id} requested settings")
+    await update_user(update.effective_user)
+    
+    session = Session()
+    user = session.query(User).filter_by(user_id=user_id).first()
+    
+    if not user:
+        await update.message.reply_text('Please configure your settings first with /config')
+        session.close()
+        return ConversationHandler.END
+    
+    preserve_links = bool(user.preserve_image_links) if user.preserve_image_links is not None else False
+    kindle_email = user.kindle_email or "Not configured"
+    
+    message = f"""Current Settings:
+📧 Kindle Email: {kindle_email}
+🖼️ Preserve Image Links: {'Yes' if preserve_links else 'No'}
+
+Commands:
+/config - Change Kindle email
+/imagelinks - Toggle preserve image links setting
+/cancel - Cancel operation"""
+    
+    session.close()
+    await update.message.reply_text(message)
+    return ConversationHandler.END
+
+
+async def toggle_image_links(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Toggle the preserve image links setting."""
+    user_id = update.effective_user.id
+    logger.debug(f"User {user_id} toggling image links setting")
+    await update_user(update.effective_user)
+    
+    session = Session()
+    user = session.query(User).filter_by(user_id=user_id).first()
+    
+    if not user:
+        await update.message.reply_text('Please configure your settings first with /config')
+        session.close()
+        return ConversationHandler.END
+    
+    # Toggle the setting
+    current_setting = bool(user.preserve_image_links) if user.preserve_image_links is not None else False
+    new_setting = not current_setting
+    user.preserve_image_links = 1 if new_setting else 0
+    
+    session.commit()
+    session.close()
+    
+    status = "enabled" if new_setting else "disabled"
+    await update.message.reply_text(f'Image link preservation has been {status}.')
+    logger.info(f"User {user_id} set preserve_image_links to {new_setting}")
+    
+    return ConversationHandler.END
 
 async def is_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Check if the input is a URL."""
@@ -179,15 +241,19 @@ async def process_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
             raise Exception("Failed to retrieve content from URL")
         logger.info(f"Successfully retrieved content from URL: {url}")
 
-        ebook=convert_to_epub(content)
-        logger.info("Successfully converted content to EPUB")
-
         session = Session()
         user = session.query(User).filter_by(user_id=update.effective_user.id).first()
-        session.close()
 
         if not user or not user.kindle_email:
+            session.close()
             raise Exception("Please configure your Kindle email first using /config")
+
+        # Get user's preserve image links preference
+        preserve_image_links = bool(user.preserve_image_links) if user.preserve_image_links is not None else False
+        session.close()
+
+        ebook = convert_to_epub(content, preserve_image_links=preserve_image_links)
+        logger.info("Successfully converted content to EPUB")
 
         send_email(user.kindle_email, ebook)
 
@@ -241,7 +307,9 @@ def main():
     # In the main function, modify the conversation handler:
     conv_handler = ConversationHandler(
         entry_points=[
-            CommandHandler('config', config)
+            CommandHandler('config', config),
+            CommandHandler('settings', settings),
+            CommandHandler('imagelinks', toggle_image_links)
         ],
         states={
             EMAIL: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_email)]
@@ -249,6 +317,8 @@ def main():
         fallbacks=[
             CommandHandler("start", start),
             CommandHandler("config", config),
+            CommandHandler("settings", settings),
+            CommandHandler("imagelinks", toggle_image_links),
             CommandHandler("cancel", cancel),
             CommandHandler("delete", delete_email),
         ],
@@ -256,6 +326,8 @@ def main():
 
     application.add_handler(conv_handler)
     application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("settings", settings))
+    application.add_handler(CommandHandler("imagelinks", toggle_image_links))
     application.add_handler(CommandHandler("delete", delete_email))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, process_link))
 
