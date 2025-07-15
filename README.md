@@ -1,6 +1,6 @@
 # Web to Kindle Telegram Bot
 
-A Telegram bot that allows users to scrape Substack articles, convert them to Kindle-compatible EPUB files, and send them directly to their Kindle devices via email.
+A Telegram bot that allows users to scrape web articles from any website, convert them to Kindle-compatible EPUB files, and send them directly to their Kindle devices via email. Substack articles are specially optimized for the best reading experience.
 
 ## 🚀 Try the Deployed Bot
 
@@ -14,14 +14,14 @@ Or deploy your own instance using the instructions below.
 1. Visit [@SubstackKindleBot](https://t.me/SubstackKindleBot) on Telegram
 2. Send `/start` to begin
 3. Configure your Kindle email with `/config`
-4. Send any Substack article URL to convert and receive on your Kindle
+4. Send any article URL to convert and receive on your Kindle
 
 ### Option 2: Use the CLI Tool (For Developers)
 ```bash
 git clone https://github.com/gunneone/web-to-kindle-telegram-bot.git
 cd web-to-kindle-telegram-bot
 pip install -r requirements.txt
-python cli.py https://your-substack-article-url
+python cli.py https://your-article-url
 ```
 
 ### Option 3: Deploy Your Own Bot
@@ -30,7 +30,7 @@ Follow the full installation instructions below.
 ## Features
 
 - **Multiple interfaces:** Use via Telegram bot or command-line interface (CLI)
-- Web scraper to extract Substack article content, removing unnecessary elements like buttons and ads.
+- Web scraper to extract content from any website article, with special optimizations for Substack articles that remove unnecessary elements like buttons and ads.
 - Converts extracted content to an EPUB format compatible with Kindle devices.
 - Integrates with a Telegram bot for an intuitive user interface.
 - Sends the EPUB file to the user's Kindle email address.
@@ -121,7 +121,7 @@ Follow the full installation instructions below.
 
 ### 5. **Send an Article:**
 
-   Use `/send` followed by a Substack article URL to send content directly to your Kindle. Alternatively:
+   Use `/send` followed by any web article URL to send content directly to your Kindle. Alternatively:
    - Send `/send` without an URL, and the bot will prompt you to provide a link.
 
 ### 6. **Approve the Sender's Email:**
@@ -133,7 +133,7 @@ Follow the full installation instructions below.
 ## How it Works
 
 1. **Scraping Content:**
-   - The `web_scraper.py` extracts the main content, title, and author from Substack articles. Unnecessary buttons and ads are removed.
+   - The `web_scraper.py` extracts the main content, title, and author from web articles. For Substack articles, it provides enhanced extraction with removal of unnecessary buttons and ads.
 
 2. **Converting to EPUB:**
    - In `epub_converter.py`, the content is packaged into an EPUB book, embedding metadata like the title, author, and images.
@@ -142,7 +142,7 @@ Follow the full installation instructions below.
    - The `email_sender.py` sends the generated EPUB to the user's Kindle email via an SMTP server.
 
 4. **Telegram Interface:**
-   - Users interact with the bot using straightforward commands to configure their Kindle email, toggle settings, and process Substack articles.
+   - Users interact with the bot using straightforward commands to configure their Kindle email, toggle settings, and process articles from any website.
 
 ---
 
@@ -164,16 +164,16 @@ For users who prefer command-line tools or want to integrate the functionality i
 # Install dependencies
 pip install -r requirements.txt
 
-# Process a Substack article (basic usage)
-python cli.py https://example.substack.com/p/article-title
+# Process any web article (basic usage)
+python cli.py https://example.com/article-title
 
-# Process article with image links preserved (clickable images)
-python cli.py --preserve-image-links https://example.substack.com/p/article-title
+# Process article with image links preserved (clickable images) 
+python cli.py --preserve-image-links https://example.com/article-title
 ```
 
 ### CLI Features
 
-- **Direct processing:** Convert Substack articles to EPUB without needing a Telegram bot
+- **Direct processing:** Convert web articles to EPUB without needing a Telegram bot (supports any website, with special optimizations for Substack)
 - **Image link preservation:** Use `--preserve-image-links` flag to keep clickable links on images
 - **Batch processing capability:** Can be integrated into scripts for multiple articles
 - **Email integration:** Automatically sends EPUB to configured Kindle email
