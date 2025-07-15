@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 @click.argument('url')
 @click.option('--preserve-image-links', is_flag=True, default=False, help='Preserve links in images')
 def main(url, preserve_image_links):
-    """Convert Substack article to EPUB and send to Kindle."""
+    """Convert web article to EPUB and send to Kindle."""
     try:
         logger.info(f"Processing URL: {url}")
         content = get_website_content(url)
