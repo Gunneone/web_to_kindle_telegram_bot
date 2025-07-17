@@ -73,8 +73,11 @@ def is_substack_site(url: str) -> bool:
             # and the domain looks like it could reasonably be a Substack custom domain
             hostname = parsed_url.hostname
             if hostname and not hostname.endswith(('.gov', '.edu')) and '/p/' in path:
-                logger.info(f"Assuming Substack based on URL pattern /p/ for: {url}")
-                return True
+                # Be more conservative about well-known non-Substack platforms
+                known_non_substack = ['medium.com', 'wordpress.com', 'blogspot.com', 'tumblr.com']
+                if not any(platform in hostname.lower() for platform in known_non_substack):
+                    logger.info(f"Assuming Substack based on URL pattern /p/ for: {url}")
+                    return True
     
     return False
 
