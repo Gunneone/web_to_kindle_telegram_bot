@@ -141,15 +141,27 @@ def convert_to_epub(article: Article, preserve_image_links: bool = False) -> str
 
     title = article["Title"]
     author = article["Author"]
+    publication = article.get("Publication") if hasattr(article, 'get') else getattr(article, 'Publication', None)
     html_content = article["Content"]
 
     logger.debug(f"Article title: {title}")
     logger.debug(f"Article author: {author}")
+    logger.debug(f"Article publication: {publication}")
 
     # Set metadata
     book.set_title(title)
     book.set_language('en')
     book.add_author(author)
+    
+    # Add publication as publisher if available
+    if publication:
+        book.add_metadata('DC', 'publisher', publication)
+        logger.debug(f"Added publication as publisher: {publication}")
+    
+    # Add description that includes publication info if available
+    if publication:
+        description = f"Article from {publication}"
+        book.add_metadata('DC', 'description', description)
     
     # Create output directory if it doesn't exist
     os.makedirs('./epubs', exist_ok=True)

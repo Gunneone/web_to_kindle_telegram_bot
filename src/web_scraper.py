@@ -13,12 +13,13 @@ logger = logging.getLogger(__name__)
 
 
 class Article:
-    def __init__(self, url, title, author, published_at, content):
+    def __init__(self, url, title, author, published_at, content, publication=None):
         self.URL = url
         self.Title = title
         self.Author = author
         self.Published_At = published_at
         self.Content = content
+        self.Publication = publication
 
     def __getitem__(self, key):
         return getattr(self, key)
@@ -91,7 +92,8 @@ def get_generic_content(url: str) -> Article | None:
                     title=title,
                     author=author,
                     published_at=published,
-                    content=content
+                    content=content,
+                    publication=None  # Generic content doesn't have publication info
                 )
             else:
                 logger.error("Readability failed to extract content")
@@ -135,6 +137,55 @@ def get_substack_content(url: str) -> Article:
             author_element = soup.find('div', class_='profile-hover-card-target')
             author = author_element.find('a').text.strip() if author_element else "Unknown Author"
 
+            # Extract publication name from multiple potential sources
+            publication = None
+            
+            # Method 1: Check og:site_name meta tag
+            og_site_name = soup.find('meta', property='og:site_name')
+            if og_site_name and og_site_name.get('content'):
+                publication = og_site_name['content'].strip()
+                logger.info(f"Found publication name from og:site_name: {publication}")
+            
+            # Method 2: If no og:site_name, try to extract from URL subdomain
+            if not publication:
+                from urllib.parse import urlparse
+                parsed_url = urlparse(url)
+                hostname = parsed_url.hostname
+                if hostname and hostname.endswith('.substack.com') and hostname != 'substack.com':
+                    subdomain = hostname.replace('.substack.com', '')
+                    # Convert subdomain to title case and replace hyphens
+                    publication = subdomain.replace('-', ' ').title()
+                    logger.info(f"Extracted publication name from subdomain: {publication}")
+            
+            # Method 3: Look for publication name in the page header/branding area
+            if not publication:
+                # Check for publication name in header elements
+                header_elements = soup.find_all(['h1', 'h2', 'h3'], class_=lambda x: x and any(
+                    keyword in x.lower() for keyword in ['publication', 'header', 'title', 'name', 'brand']
+                ))
+                for header in header_elements:
+                    text = header.get_text().strip()
+                    # Skip if it looks like an article title (too long or contains common article words)
+                    if len(text) < 50 and not any(word in text.lower() for word in ['how', 'why', 'what', 'the art', 'a guide']):
+                        publication = text
+                        logger.info(f"Found publication name from header: {publication}")
+                        break
+            
+            # Method 4: Check title tag for publication name pattern
+            if not publication:
+                title_tag = soup.find('title')
+                if title_tag:
+                    title_text = title_tag.get_text()
+                    # Many Substack pages have titles like "Article Title | Publication Name"
+                    if ' | ' in title_text:
+                        parts = title_text.split(' | ')
+                        if len(parts) >= 2:
+                            potential_pub = parts[-1].strip()
+                            # Avoid generic terms
+                            if potential_pub.lower() not in ['substack', 'blog', 'newsletter']:
+                                publication = potential_pub
+                                logger.info(f"Found publication name from title: {publication}")
+
             # extract title which is the first h1, that is not in a .pc-display-flex element
             h1_elements = soup.find_all('h1')
             title = None
@@ -147,9 +198,18 @@ def get_substack_content(url: str) -> Article:
                     author_heading.string = f"By {author}"
                     horizontal_line = soup.new_tag('hr')
                     horizontal_line['style'] = 'border-top: 1px solid #ccc; margin: 20px 0;'
-
-                    h1.insert_after(horizontal_line)
-                    h1.insert_after(author_heading)
+                    
+                    # Add publication info if available
+                    if publication:
+                        publication_heading = soup.new_tag('h5')
+                        publication_heading.string = f"From: {publication}"
+                        publication_heading['style'] = 'color: #666; font-style: italic; margin: 10px 0;'
+                        h1.insert_after(horizontal_line)
+                        h1.insert_after(publication_heading)
+                        h1.insert_after(author_heading)
+                    else:
+                        h1.insert_after(horizontal_line)
+                        h1.insert_after(author_heading)
                     break
             if not title:
                 title = "Unknown Title"
@@ -180,7 +240,8 @@ def get_substack_content(url: str) -> Article:
                 title=title,
                 author=author,
                 published_at=datetime.now().isoformat(),
-                content=str(article_content)
+                content=str(article_content),
+                publication=publication
             )
 
             return article
