@@ -75,4 +75,4 @@ epubs/
 users.db
 
 # Test files
-test_*.py
+# (Test files should be committed to version control)
