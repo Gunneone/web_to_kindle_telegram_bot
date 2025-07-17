@@ -73,3 +73,6 @@ epubs/
 *.epub
 *.db
 users.db
+
+# Test files
+test_*.py
