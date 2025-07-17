@@ -4,6 +4,7 @@ from datetime import datetime
 import logging
 from readability import Document
 import os
+from urllib.parse import urlparse
 
 logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s',
@@ -27,6 +28,60 @@ class Article:
         return setattr(self, key, value)
 
 
+def is_substack_site(url: str) -> bool:
+    """
+    Determines if a URL is a Substack site by checking URL patterns and HTML content.
+    
+    Args:
+        url (str): The URL to check
+        
+    Returns:
+        bool: True if the site is detected as Substack, False otherwise
+    """
+    # First check the URL pattern - if it contains substack.com, it's definitely Substack
+    if 'substack.com' in url.lower():
+        return True
+    
+    # Check for common Substack URL patterns (like /p/ for posts)
+    parsed_url = urlparse(url)
+    path = parsed_url.path.lower()
+    if '/p/' in path:
+        # This could be Substack, let's verify by checking the HTML
+        try:
+            headers = {'User-Agent': 'Mozilla/5.0'}
+            response = requests.get(url, headers=headers, timeout=10)
+            if response.status_code == 200:
+                html_content = response.text.lower()
+                
+                # Check for various Substack indicators in the HTML
+                substack_indicators = [
+                    'substack',  # General Substack references
+                    'generator" content="substack',  # Meta generator tag
+                    'substack-app',  # Common Substack div ID
+                    'substackcdn.com',  # Substack CDN references
+                ]
+                
+                # If any indicator is found, it's likely a Substack site
+                for indicator in substack_indicators:
+                    if indicator in html_content:
+                        logger.info(f"Detected Substack site based on HTML indicator: {indicator}")
+                        return True
+                        
+        except Exception as e:
+            logger.warning(f"Could not verify Substack status for {url}: {str(e)}")
+            # Only assume it's Substack based on URL pattern if we can't check the HTML
+            # and the domain looks like it could reasonably be a Substack custom domain
+            hostname = parsed_url.hostname
+            if hostname and not hostname.endswith(('.gov', '.edu')) and '/p/' in path:
+                # Be more conservative about well-known non-Substack platforms
+                known_non_substack = ['medium.com', 'wordpress.com', 'blogspot.com', 'tumblr.com']
+                if not any(platform in hostname.lower() for platform in known_non_substack):
+                    logger.info(f"Assuming Substack based on URL pattern /p/ for: {url}")
+                    return True
+    
+    return False
+
+
 def get_website_content(url: str) -> Article:
     """
     Determines if URL is a Substack page and extracts content accordingly.
@@ -37,7 +92,7 @@ def get_website_content(url: str) -> Article:
     Returns:
         Article: Article object containing extracted content
     """
-    if 'substack.com' in url.lower():
+    if is_substack_site(url):
         return get_substack_content(url)
     else:
         return get_generic_content(url)
@@ -148,7 +203,6 @@ def get_substack_content(url: str) -> Article:
             
             # Method 2: If no og:site_name, try to extract from URL subdomain
             if not publication:
-                from urllib.parse import urlparse
                 parsed_url = urlparse(url)
                 hostname = parsed_url.hostname
                 if hostname and hostname.endswith('.substack.com') and hostname != 'substack.com':
