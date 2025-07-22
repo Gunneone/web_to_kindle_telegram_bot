@@ -36,6 +36,7 @@ Follow the full installation instructions below.
 - Sends the EPUB file to the user's Kindle email address.
 - Allows configuration of Kindle email within the bot.
 - **Configurable image link preservation:** Toggle whether to preserve clickable links on images (useful for zoom functionality).
+- **Automatic file cleanup:** Monitors disk space and automatically deletes old HTML and EPUB files when space is low (below 2GB) to prevent storage issues while keeping recent files for debugging.
 
 ---
 
@@ -91,11 +92,17 @@ Follow the full installation instructions below.
 
 4. **Run the Bot:**
 
-   Start the bot using:
-
+   **Option A: Direct Python execution**
    ```bash
-   python src/telegram_bot.py
+   python telegram_bot.py
    ```
+
+   **Option B: Using Docker Compose (Recommended for production)**
+   ```bash
+   docker compose up -d
+   ```
+   
+   This will start both the Telegram bot and the disk monitoring service that automatically manages old files to prevent storage issues.
 
 ---
 
@@ -143,6 +150,9 @@ Follow the full installation instructions below.
 
 4. **Telegram Interface:**
    - Users interact with the bot using straightforward commands to configure their Kindle email, toggle settings, and process articles from any website.
+
+5. **Automatic File Management:**
+   - The `disk_monitor.py` service continuously monitors disk space and automatically removes the oldest HTML and EPUB files when available space falls below 2GB, ensuring the system doesn't run out of storage while preserving recent files for debugging purposes.
 
 ---
 

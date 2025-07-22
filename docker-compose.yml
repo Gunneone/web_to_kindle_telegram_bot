@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   bot:
     build: .
@@ -10,3 +8,16 @@ services:
     volumes:
       - .:/app  # Bind mount for application code
       - .env:/app/.env:ro  # Mount .env file as read-only
+
+  disk-monitor:
+    build: .
+    container_name: web-to-kindle-disk-monitor
+    restart: always
+    environment:
+      - TZ=UTC
+    volumes:
+      - .:/app  # Bind mount for application code
+      - .env:/app/.env:ro  # Mount .env file as read-only
+    command: ["python", "disk_monitor.py"]
+    depends_on:
+      - bot
