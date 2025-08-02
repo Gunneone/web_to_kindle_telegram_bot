@@ -164,10 +164,10 @@ def convert_to_epub(article: Article, preserve_image_links: bool = False) -> str
         book.add_metadata('DC', 'description', description)
     
     # Create output directory if it doesn't exist
-    os.makedirs('./epubs', exist_ok=True)
+    os.makedirs('./output/epubs', exist_ok=True)
     # Create article-specific subfolder
     safe_dirname = title.lower().replace(' ', '-')[:70]
-    article_dir = os.path.join('./epubs', safe_dirname)
+    article_dir = os.path.join('./output/epubs', safe_dirname)
     os.makedirs(article_dir, exist_ok=True)
 
     # Add cover
@@ -195,7 +195,7 @@ def convert_to_epub(article: Article, preserve_image_links: bool = False) -> str
     book.spine = [content]
 
     # Save EPUB file
-    article_dir = os.path.join('./epubs', safe_dirname)
+    article_dir = os.path.join('./output/epubs', safe_dirname)
     epub_path = os.path.join(article_dir, f"{title}.epub")
     logger.debug(f"Saving EPUB to: {epub_path}")
     epub.write_epub(epub_path, book)
