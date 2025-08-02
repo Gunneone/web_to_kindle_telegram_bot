@@ -4,7 +4,7 @@ import logging
 from bs4 import BeautifulSoup
 from ebooklib import epub
 
-from src.web_scraper import Article
+from web_scraper import Article
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',

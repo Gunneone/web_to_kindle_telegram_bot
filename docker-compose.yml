@@ -18,6 +18,6 @@ services:
     volumes:
       - .:/app  # Bind mount for application code
       - .env:/app/.env:ro  # Mount .env file as read-only
-    command: ["python", "disk_monitor.py"]
+    command: ["python", "src/disk_monitor.py"]
     depends_on:
       - bot

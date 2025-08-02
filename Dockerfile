@@ -12,4 +12,4 @@ COPY . .
 # Copy the real .env file (make sure to create it from .env.example)
 COPY .env .
 
-CMD ["python", "telegram_bot.py"]
+CMD ["python", "src/telegram_bot.py"]

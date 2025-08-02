@@ -68,8 +68,7 @@ ehthumbs.db
 Thumbs.db
 
 # Project specific
-html/
-epubs/
+*.html
 *.epub
 *.db
 users.db

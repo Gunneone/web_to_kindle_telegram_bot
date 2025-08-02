@@ -36,7 +36,7 @@ def get_disk_usage() -> Tuple[int, int, int]:
         Tuple of (total, used, free) disk space in bytes
     """
     try:
-        statvfs = os.statvfs('.')
+        statvfs = os.statvfs('..')
         total = statvfs.f_frsize * statvfs.f_blocks
         # Try different attributes for available space
         if hasattr(statvfs, 'f_bavail'):

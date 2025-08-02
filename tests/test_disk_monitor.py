@@ -8,15 +8,15 @@ import tempfile
 import shutil
 import os
 import time
-from unittest.mock import patch, Mock
+from unittest.mock import patch
 import sys
 
 # Add the main directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from disk_monitor import (
+from src.disk_monitor import (
     get_disk_usage, get_files_by_age, delete_file_safely,
-    delete_empty_directories, cleanup_old_files, DISK_SPACE_THRESHOLD
+    delete_empty_directories, cleanup_old_files
 )
 
 
