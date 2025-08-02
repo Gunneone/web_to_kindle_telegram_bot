@@ -4,7 +4,7 @@ from datetime import datetime
 import logging
 from readability import Document
 import os
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urljoin
 
 logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s',
@@ -120,6 +120,19 @@ def get_generic_content(url: str) -> Article | None:
             if content:
                 logger.info("Content extracted using readability")
 
+                # Fix relative image URLs to absolute URLs
+                soup = BeautifulSoup(content, 'html.parser')
+
+                # Find all img tags and fix their src attributes
+                for img in soup.find_all('img', src=True):
+                    src = img['src']
+                    # Convert relative URLs to absolute URLs
+                    absolute_src = urljoin(url, src)
+                    img['src'] = absolute_src
+
+                # Update content with fixed URLs
+                content = str(soup)
+
                 # Create safe filename by removing special characters
                 safe_title = ''.join(c for c in title.lower() if c.isalnum() or c in ' -_')
                 safe_title = safe_title.replace(' ', '-')[:70]
@@ -200,7 +213,7 @@ def get_substack_content(url: str) -> Article:
             if og_site_name and og_site_name.get('content'):
                 publication = og_site_name['content'].strip()
                 logger.info(f"Found publication name from og:site_name: {publication}")
-            
+
             # Method 2: If no og:site_name, try to extract from URL subdomain
             if not publication:
                 parsed_url = urlparse(url)
@@ -210,35 +223,7 @@ def get_substack_content(url: str) -> Article:
                     # Convert subdomain to title case and replace hyphens
                     publication = subdomain.replace('-', ' ').title()
                     logger.info(f"Extracted publication name from subdomain: {publication}")
-            
-            # Method 3: Look for publication name in the page header/branding area
-            if not publication:
-                # Check for publication name in header elements
-                header_elements = soup.find_all(['h1', 'h2', 'h3'], class_=lambda x: x and any(
-                    keyword in x.lower() for keyword in ['publication', 'header', 'title', 'name', 'brand']
-                ))
-                for header in header_elements:
-                    text = header.get_text().strip()
-                    # Skip if it looks like an article title (too long or contains common article words)
-                    if len(text) < 50 and not any(word in text.lower() for word in ['how', 'why', 'what', 'the art', 'a guide']):
-                        publication = text
-                        logger.info(f"Found publication name from header: {publication}")
-                        break
-            
-            # Method 4: Check title tag for publication name pattern
-            if not publication:
-                title_tag = soup.find('title')
-                if title_tag:
-                    title_text = title_tag.get_text()
-                    # Many Substack pages have titles like "Article Title | Publication Name"
-                    if ' | ' in title_text:
-                        parts = title_text.split(' | ')
-                        if len(parts) >= 2:
-                            potential_pub = parts[-1].strip()
-                            # Avoid generic terms
-                            if potential_pub.lower() not in ['substack', 'blog', 'newsletter']:
-                                publication = potential_pub
-                                logger.info(f"Found publication name from title: {publication}")
+
 
             # extract title which is the first h1, that is not in a .pc-display-flex element
             h1_elements = soup.find_all('h1')
