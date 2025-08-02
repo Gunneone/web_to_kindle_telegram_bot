@@ -16,7 +16,8 @@ logger = logging.getLogger(__name__)
 @click.command()
 @click.argument('url')
 @click.option('--preserve-image-links', is_flag=True, default=False, help='Preserve links in images')
-def main(url, preserve_image_links):
+@click.option('--send-mail', is_flag=True, default=False, help='Send the EPUB file via email (default: True)')
+def main(url, preserve_image_links, send_mail):
     """Convert web article to EPUB and send to Kindle."""
     try:
         logger.info(f"Processing URL: {url}")
@@ -24,10 +25,16 @@ def main(url, preserve_image_links):
         logger.info("Successfully retrieved content from URL")
         ebook = convert_to_epub(content, preserve_image_links)
         logger.info("Successfully converted content to EPUB")
-        kindle_email = 'amazon_42RbqL@kindle.com'  # Replace with actual default email
-        send_email(kindle_email,ebook)
-        logger.info("Successfully sent EPUB to Kindle")
-        click.echo('Article has been sent to your Kindle!')
+        
+        if send_mail:
+            kindle_email = 'amazon12345@kindle.com'  # Replace with actual default email
+            send_email(kindle_email, ebook)
+            logger.info("Successfully sent EPUB to Kindle")
+            click.echo('Article has been sent to your Kindle!')
+        else:
+            logger.info("Email sending skipped as requested")
+            click.echo('Article has been converted to EPUB (email sending skipped)')
+            
     except Exception as e:
         logger.error(f"Error processing article: {str(e)}")
         click.echo(f'Error: {str(e)}')
