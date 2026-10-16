@@ -1,3 +1,4 @@
+import asyncio
 import os
 import os.path
 import logging
@@ -6,10 +7,9 @@ from dotenv import load_dotenv
 from sqlalchemy.sql.expression import update
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes, ConversationHandler, MessageHandler, filters
-import validators
 
 from email_sender import send_email
-from web_scraper import get_website_content
+from web_scraper import get_website_content, extract_url, ScraperError
 from epub_converter import convert_to_epub
 from sqlalchemy import create_engine, Column, Integer, String, DateTime, inspect, text
 from sqlalchemy.orm import sessionmaker,declarative_base
@@ -197,7 +197,7 @@ async def is_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Check if the input is a URL."""
     text = update.message.text
     user_id = update.effective_user.id
-    if validators.url(text):
+    if extract_url(text):
         logger.debug(f"Received URL instead of email from user {user_id}")
         return True
     else:
@@ -210,7 +210,7 @@ async def process_email(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if not text.endswith('@kindle.com'):
         # Check if the input looks like a URL
-        if is_url(update, context):
+        if await is_url(update, context):
             logger.debug(f"Received URL instead of email from user {user_id}")
             return await process_link(update, context)
         else:
@@ -230,32 +230,34 @@ async def process_email(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def process_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Process the Substack link."""
-    url = context.args[0] if context.args else update.message.text
+    """Fetch the article behind a link, convert it to EPUB and email it to the user's Kindle."""
+    text = ' '.join(context.args) if context.args else update.message.text
+    url = extract_url(text)
+    if not url:
+        await update.message.reply_text('Please send me a link to an article.')
+        return ConversationHandler.END
+
+    session = Session()
+    user = session.query(User).filter_by(user_id=update.effective_user.id).first()
+    kindle_email = user.kindle_email if user else None
+    preserve_image_links = bool(user.preserve_image_links) if user and user.preserve_image_links is not None else False
+    session.close()
+    if not kindle_email:
+        await update.message.reply_text('Please configure your Kindle email first using /config')
+        return ConversationHandler.END
+
     try:
         # send typing chat action
         await context.bot.send_chat_action(update.effective_chat.id, 'typing')
         logger.info(f"Processing URL: {url}")
-        content = get_website_content(url)
-        if not content:
-            raise Exception("Failed to retrieve content from URL")
+        # Scraping, image downloads and SMTP are blocking; run them off the event loop
+        content = await asyncio.to_thread(get_website_content, url)
         logger.info(f"Successfully retrieved content from URL: {url}")
 
-        session = Session()
-        user = session.query(User).filter_by(user_id=update.effective_user.id).first()
-
-        if not user or not user.kindle_email:
-            session.close()
-            raise Exception("Please configure your Kindle email first using /config")
-
-        # Get user's preserve image links preference
-        preserve_image_links = bool(user.preserve_image_links) if user.preserve_image_links is not None else False
-        session.close()
-
-        ebook = convert_to_epub(content, preserve_image_links=preserve_image_links)
+        ebook = await asyncio.to_thread(convert_to_epub, content, preserve_image_links)
         logger.info("Successfully converted content to EPUB")
 
-        send_email(user.kindle_email, ebook)
+        await asyncio.to_thread(send_email, kindle_email, ebook)
 
         # Save article record
         article = Article(
@@ -271,14 +273,24 @@ async def process_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
         username = update.effective_user.username or f"ID:{update.effective_user.id}"
         logger.info(f"Successfully sent EPUB '{content.Title}' to Kindle for user {username}")
 
-        await update.message.reply_text('Article has been sent to your Kindle!')
+        if content.Is_Preview:
+            await update.message.reply_text(
+                f'"{content.Title}" has been sent to your Kindle. Note: the full post is paywalled, '
+                'so only the free preview is included.')
+        else:
+            await update.message.reply_text(f'"{content.Title}" has been sent to your Kindle!')
 
         # Notify admin
         if ADMIN_ID:
             admin_message = f"Ebook '{content.Title}' sent to {username}."
             await context.bot.send_message(chat_id=ADMIN_ID, text=admin_message)
             if os.path.exists(ebook):
-                await context.bot.send_document(chat_id=ADMIN_ID, document=open(ebook, 'rb'))
+                with open(ebook, 'rb') as document:
+                    await context.bot.send_document(chat_id=ADMIN_ID, document=document)
+    except ScraperError as e:
+        # Blocked sites, paywalls, timeouts, pages without article text: the message explains it
+        logger.warning(f"Could not process URL {url}: {e}")
+        await update.message.reply_text(f"Sorry, I couldn't retrieve this article. {e}")
     except Exception as e:
         logger.error(f"Error processing URL {url}: {str(e)}")
         # print full stack trace

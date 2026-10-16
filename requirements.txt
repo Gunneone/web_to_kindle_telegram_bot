@@ -6,4 +6,6 @@ SQLAlchemy~=2.0.38
 EbookLib~=0.19
 click
 readability-lxml
-validators
+trafilatura~=2.3
+Pillow~=12.3
+curl_cffi~=0.16

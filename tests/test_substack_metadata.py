@@ -11,9 +11,9 @@ import sys
 import os
 
 # Add src directory to path for imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
-from web_scraper import get_substack_content, Article
+from web_scraper import get_website_content, Article
 
 
 class TestSubstackMetadataExtraction(unittest.TestCase):
@@ -82,7 +82,7 @@ class TestSubstackMetadataExtraction(unittest.TestCase):
 
         try:
             # Make real HTTP request
-            article = get_substack_content(url)
+            article = get_website_content(url)
 
             # Print results and assert
             self.print_test_results("Win-Win Metadata Extraction", article, url, title, author, publication)
@@ -101,7 +101,7 @@ class TestSubstackMetadataExtraction(unittest.TestCase):
 
         try:
             # Make real HTTP request
-            article = get_substack_content(url)
+            article = get_website_content(url)
 
             # Print results and assert
             self.print_test_results("Knowingless Metadata Extraction", article, url, title, author, publication)
@@ -116,11 +116,11 @@ class TestSubstackMetadataExtraction(unittest.TestCase):
         url = "https://www.sustainabilitybynumbers.com/p/population-growth-decline-climate"
         title = "Population growth or decline will have little impact on climate change"
         author = "Hannah Ritchie"
-        publication = "Sustainability by numbers"
+        publication = "By the Numbers"  # renamed from "Sustainability by numbers" in 2026
 
         try:
             # Make real HTTP request
-            article = get_substack_content(url)
+            article = get_website_content(url)
 
             # Print results and assert
             self.print_test_results("Sustainability by Numbers Metadata Extraction", article, url, title, author,
@@ -141,7 +141,7 @@ class TestSubstackMetadataExtraction(unittest.TestCase):
 
         try:
             # Make REAL HTTP request - no mocking
-            article = get_substack_content(url)
+            article = get_website_content(url)
 
             # Print actual extracted data
             print(f"📄 Extracted Data:")
@@ -187,7 +187,7 @@ class TestSubstackMetadataExtraction(unittest.TestCase):
         print(f"{'=' * 60}")
 
         with self.assertRaises(Exception) as context:
-            get_substack_content(url)
+            get_website_content(url)
 
         print(f"✅ Exception properly raised: {str(context.exception)}")
 
@@ -198,7 +198,7 @@ class TestSubstackMetadataExtraction(unittest.TestCase):
         # This test is more exploratory since we can't control the HTML content
         # We'll just verify that the extraction doesn't crash and returns an Article object
         try:
-            article = get_substack_content(url)
+            article = get_website_content(url)
 
             # Should still work and return an Article object
             self.assertIsInstance(article, Article)
@@ -220,7 +220,7 @@ class TestSubstackMetadataExtraction(unittest.TestCase):
         url = "https://substack.com/inbox/post/164719684"
 
         try:
-            article = get_substack_content(url)
+            article = get_website_content(url)
 
             # Test that all required attributes exist
             required_attrs = ['URL', 'Title', 'Author', 'Published_At', 'Content', 'Publication']

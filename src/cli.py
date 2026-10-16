@@ -65,14 +65,15 @@ def main(url, file, preserve_image_links, send_mail):
             ebook = convert_to_epub(content, preserve_image_links)
             logger.info("Successfully converted content to EPUB")
 
+            preview_note = ' (paywalled: preview only)' if content.Is_Preview else ''
             if send_mail:
                 kindle_email = 'amazon12345@kindle.com'  # Replace with actual default email
                 send_email(kindle_email, ebook)
                 logger.info("Successfully sent EPUB to Kindle")
-                click.echo(f'✓ Article "{content.Title}" sent to Kindle')
+                click.echo(f'✓ Article "{content.Title}" sent to Kindle{preview_note}')
             else:
                 logger.info("Email sending skipped as requested")
-                click.echo(f'✓ Article "{content.Title}" converted to EPUB')
+                click.echo(f'✓ Article "{content.Title}" converted to EPUB{preview_note}: {ebook}')
 
             successful_count += 1
 

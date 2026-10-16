@@ -31,6 +31,9 @@ Follow the full installation instructions below.
 
 - **Multiple interfaces:** Use via Telegram bot or command-line interface (CLI)
 - Web scraper to extract content from any website article, with special optimizations for Substack articles that remove unnecessary elements like buttons and ads.
+- **Medium support:** Medium blocks plain HTTP clients, so the bot retries with browser impersonation and falls back to the author's RSS feed (recent posts only).
+- **Paywalled posts:** paid-only Substack and member-only Medium posts are sent as a preview with a notice linking to the full post.
+- Real titles, authors, dates and languages from page metadata; lazy-loaded images are kept and converted to Kindle-friendly JPEG/PNG. See [docs/site-compatibility.md](docs/site-compatibility.md) for the tested sites and `tests/site_survey/run.py` to rerun the survey.
 - Converts extracted content to an EPUB format compatible with Kindle devices.
 - Integrates with a Telegram bot for an intuitive user interface.
 - Sends the EPUB file to the user's Kindle email address.
