@@ -1,10 +1,19 @@
-import os
-import requests
+import base64
+import io
 import logging
+import os
+import re
+import uuid
+from concurrent.futures import ThreadPoolExecutor
+from html import escape
+
 from bs4 import BeautifulSoup
 from ebooklib import epub
+from PIL import Image, ImageOps, UnidentifiedImageError
 
 from web_scraper import Article
+from web_scraper.html_cleanup import FALLBACK_SRC
+from web_scraper.http import fetch_bytes
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -12,116 +21,118 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+MAX_IMAGES = 300
+MAX_IMAGE_WIDTH = 1600
+DOWNLOAD_WORKERS = 8
+# Formats Kindle's EPUB conversion handles natively; everything else (WebP, AVIF, ...) is converted
+KINDLE_FORMATS = {'JPEG': ('jpg', 'image/jpeg'), 'PNG': ('png', 'image/png'), 'GIF': ('gif', 'image/gif')}
+STYLESHEET = """
+img { max-width: 100%; height: auto; }
+figure { margin: 1em 0; }
+figcaption { font-size: 0.9em; font-style: italic; }
+pre { white-space: pre-wrap; }
+"""
 
-def download_image(url: str, images_dir: str, article_title: str) -> tuple:
-    """Download image from URL and save it locally"""
-    logger.debug(f"Attempting to download image from: {url}")
+
+def load_image(src: str) -> bytes | None:
+    """Return the raw bytes of an image URL or data: URI."""
+    if src.startswith('data:'):
+        match = re.match(r'data:image/[\w.+-]+;base64,(.*)', src, re.S)
+        if not match:
+            return None
+        try:
+            return base64.b64decode(match.group(1))
+        except ValueError:
+            return None
+    result = fetch_bytes(src)
+    return result[0] if result else None
+
+
+def to_kindle_image(data: bytes) -> tuple[bytes, str, str] | None:
+    """
+    Convert image bytes to a Kindle-friendly format and size.
+
+    Returns (content, extension, media_type), or None for undecodable data and tracking pixels.
+    """
+    if b'<svg' in data[:1024].lower():
+        return data, 'svg', 'image/svg+xml'
     try:
-        response = requests.get(url)
-        logger.debug(f"HTTP Status Code: {response.status_code}")
+        with Image.open(io.BytesIO(data)) as image:
+            if image.width <= 2 or image.height <= 2:
+                return None  # tracking pixel
+            animated = getattr(image, 'is_animated', False)
+            if image.format in KINDLE_FORMATS and (image.width <= MAX_IMAGE_WIDTH or animated):
+                extension, media_type = KINDLE_FORMATS[image.format]
+                return data, extension, media_type
 
-        if response.status_code == 200:
-            content_type = response.headers.get('content-type', 'image/jpeg')
-            
-            # Generate a safe filename from the last part of the URL
-            url_parts = url.split('/')
-            original_filename = url_parts[-1].split('?')[0]  # Remove query parameters
-            
-            # If filename is empty or invalid, generate one
-            if not original_filename or original_filename.startswith('http'):
-                ext_map = {
-                    'image/jpeg': '.jpg',
-                    'image/png': '.png',
-                    'image/gif': '.gif',
-                    'image/webp': '.webp'
-                }
-                image_ext = ext_map.get(content_type, '.jpg')
-                original_filename = f"image_{hash(url)}{image_ext}"
-            
-            # Clean up the filename to remove any special characters
-            image_name = ''.join(c for c in original_filename if c.isalnum() or c in '._-')
-            image_path = os.path.join(images_dir, image_name)
-            
-            logger.debug(f"Saving image to: {image_path}")
-
-            with open(image_path, 'wb') as f:
-                f.write(response.content)
-            logger.debug(f"Successfully saved image: {image_name}")
-            return image_name, content_type, response.content
-        else:
-            logger.error(f"Failed to download image. Status code: {response.status_code}")
-            return None, None, None
-    except Exception as e:
-        logger.error(f"Exception while downloading image: {str(e)}")
-        return None, None, None
+            image = ImageOps.exif_transpose(image)
+            if image.width > MAX_IMAGE_WIDTH:
+                image.thumbnail((MAX_IMAGE_WIDTH, MAX_IMAGE_WIDTH * 10))
+            has_alpha = image.mode in ('RGBA', 'LA') or (image.mode == 'P' and 'transparency' in image.info)
+            output = io.BytesIO()
+            if has_alpha:
+                image.convert('RGBA').save(output, 'PNG', optimize=True)
+                return output.getvalue(), 'png', 'image/png'
+            image.convert('RGB').save(output, 'JPEG', quality=85, optimize=True)
+            return output.getvalue(), 'jpg', 'image/jpeg'
+    except (UnidentifiedImageError, OSError, ValueError) as e:
+        logger.warning(f"Could not decode image: {e}")
+        return None
 
 
-def process_images(html_content: str, book: epub.EpubBook, images_dir: str, article_title: str, preserve_image_links: bool = False) -> str:
-    """Process HTML content and download images"""
-    logger.debug("Starting image processing")
-    logger.debug(f"Images directory: {images_dir}")
+def _prepare_image(src: str) -> tuple[bytes, str, str] | None:
+    data = load_image(src)
+    return to_kindle_image(data) if data else None
 
+
+def process_images(html_content: str, book: epub.EpubBook, preserve_image_links: bool = False) -> str:
+    """Download all images in parallel, embed them in the book and point the HTML at the embedded copies."""
     soup = BeautifulSoup(html_content, 'html.parser')
-    logger.debug("HTML content parsed successfully")
+    images = [img for img in soup.find_all('img') if img.get('src')]
+    unique_sources = list(dict.fromkeys(img['src'] for img in images))[:MAX_IMAGES]
+    # Smaller original src of images whose larger srcset candidate was picked (e.g. Wikimedia originals are rate-limited)
+    fallbacks = {img['src']: img[FALLBACK_SRC] for img in images if img.get(FALLBACK_SRC)}
+    logger.debug(f"Found {len(images)} images ({len(unique_sources)} unique) in HTML content")
 
-    os.makedirs(images_dir, exist_ok=True)
-    logger.debug("Ensured images directory exists")
+    def prepare(src: str):
+        return _prepare_image(src) or (_prepare_image(fallbacks[src]) if src in fallbacks else None)
 
-    img_count = len(soup.find_all('img'))
-    logger.debug(f"Found {img_count} images in HTML content")
+    with ThreadPoolExecutor(max_workers=DOWNLOAD_WORKERS) as executor:
+        prepared = dict(zip(unique_sources, executor.map(prepare, unique_sources)))
 
-    processed_count = 0
-    failed_count = 0
+    embedded = {}  # src -> file name inside the EPUB
+    for src, result in prepared.items():
+        if result is None:
+            continue
+        content, extension, media_type = result
+        file_name = f'Images/img_{len(embedded) + 1:03d}.{extension}'
+        book.add_item(epub.EpubImage(uid=f'img_{len(embedded) + 1:03d}', file_name=file_name,
+                                     media_type=media_type, content=content))
+        embedded[src] = file_name
 
-    for img in soup.find_all('img'):
-        if img.get('src'):
-            logger.debug(f"Processing image {processed_count + 1}/{img_count}")
-            logger.debug(f"Image source: {img['src']}")
+    failed = 0
+    for img in images:
+        img.attrs.pop(FALLBACK_SRC, None)
+        file_name = embedded.get(img['src'])
+        if file_name is None:
+            # Never leave remote images in the book: keep the alt text instead
+            failed += 1
+            alt = (img.get('alt') or '').strip()
+            img.replace_with(soup.new_string(f'[Image: {alt}]') if alt else '')
+            continue
+        img['src'] = file_name  # content.xhtml sits next to Images/, so the reference resolves exactly
+        parent_link = img.find_parent('a')
+        if not preserve_image_links and parent_link:
+            parent_link.unwrap()  # a link can wrap several images (galleries), so keep all of its content
 
-            # Check if image is wrapped in a link
-            parent_link = img.find_parent('a')
-            if parent_link:
-                logger.debug(f"Found parent link for image: {parent_link.get('href', 'no href')}")
-
-            image_result = download_image(img['src'], images_dir, article_title)
-            image_name, media_type, image_content = image_result
-            if image_name and media_type and image_content:
-                try:
-                    # Add image to book
-                    image_path = os.path.join(images_dir, image_name)
-                    logger.debug(f"Processing image: {image_path}")
-
-                    epub_image = epub.EpubImage(
-                        uid=image_name,
-                        file_name=f'Images/{image_name}',
-                        media_type=media_type,
-                        content=image_content
-                    )
-                    book.add_item(epub_image)
-                    logger.debug(f"Added image to EPUB book: {image_name}")
-
-                    # Update image source in HTML
-                    img['src'] = f'images/{image_name}'
-                    logger.debug("Updated image source in HTML")
-                    
-                    # If preserve_image_links is disabled and image has a parent link, remove the link
-                    if not preserve_image_links and parent_link:
-                        # Replace the link with just the image
-                        parent_link.replace_with(img)
-                        logger.debug("Removed parent link from image")
-                    
-                    processed_count += 1
-                except Exception as e:
-                    logger.error(f"Failed to process image {image_name}: {str(e)}")
-                    failed_count += 1
-            else:
-                failed_count += 1
-
-    logger.debug("Image processing complete:")
-    logger.debug(f"Successfully processed: {processed_count} images")
-    logger.debug(f"Failed to process: {failed_count} images")
-
+    logger.info(f"Embedded {len(embedded)} images, {failed} image references failed")
     return str(soup)
+
+
+def safe_filename(title: str, max_length: int = 80) -> str:
+    """'TCP/IP: a "guide"?' -> 'tcp-ip-a-guide'"""
+    slug = re.sub(r'[^\w-]+', '-', title.lower(), flags=re.UNICODE).strip('-_')
+    return re.sub(r'-{2,}', '-', slug)[:max_length].strip('-') or 'article'
 
 
 def convert_to_epub(article: Article, preserve_image_links: bool = False) -> str:
@@ -129,62 +140,43 @@ def convert_to_epub(article: Article, preserve_image_links: bool = False) -> str
     Convert article content to EPUB format and save it.
 
     Args:
-        article (dict): Dictionary containing article title, author and content
+        article (Article): The extracted article
+        preserve_image_links (bool): Keep links around images (for zooming on the Kindle)
 
     Returns:
         str: Path to the saved EPUB file
+
+    Raises:
+        RuntimeError: If the EPUB file could not be written
     """
     logger.debug("Starting EPUB conversion")
+    title = article.Title or 'Untitled'
+    language = article.Language or 'en'
 
-    # Create EPUB book
     book = epub.EpubBook()
-
-    title = article["Title"]
-    author = article["Author"]
-    publication = article.get("Publication") if hasattr(article, 'get') else getattr(article, 'Publication', None)
-    html_content = article["Content"]
-
-    logger.debug(f"Article title: {title}")
-    logger.debug(f"Article author: {author}")
-    logger.debug(f"Article publication: {publication}")
-
-    # Set metadata
+    book.set_identifier(f'urn:uuid:{uuid.uuid5(uuid.NAMESPACE_URL, article.URL)}')
     book.set_title(title)
-    book.set_language('en')
-    book.add_author(author)
-    
-    # Add publication as publisher if available
-    if publication:
-        book.add_metadata('DC', 'publisher', publication)
-        logger.debug(f"Added publication as publisher: {publication}")
-    
-    # Add description that includes publication info if available
-    if publication:
-        description = f"Article from {publication}"
-        book.add_metadata('DC', 'description', description)
-    
-    # Create output directory if it doesn't exist
-    os.makedirs('./output/epubs', exist_ok=True)
-    # Create article-specific subfolder
-    safe_dirname = title.lower().replace(' ', '-')[:70]
-    article_dir = os.path.join('./output/epubs', safe_dirname)
-    os.makedirs(article_dir, exist_ok=True)
+    book.set_language(language)
+    if article.Author:
+        book.add_author(article.Author)
+    if article.Publication:
+        book.add_metadata('DC', 'publisher', article.Publication)
+        book.add_metadata('DC', 'description', f"Article from {article.Publication}")
+    if article.Published_At:
+        book.add_metadata('DC', 'date', article.Published_At)
+    book.add_metadata('DC', 'source', article.URL)
 
-    # Add cover
-    #cover_path = './substack-logo.png'
-    #if os.path.exists(cover_path):
-    #    with open(cover_path, 'rb') as cover_file:
-    #        book.set_cover('cover.png', cover_file.read())
-    #        logger.debug("Added cover image to EPUB")
-    #else:
-    #    logger.warning(f"Cover image not found at: {cover_path}")
+    html_content = article.Content
+    if article.Is_Preview:
+        url = escape(article.URL, quote=True)
+        html_content += (f'<hr/><p><em>This is a preview — the full post is for paid subscribers: '
+                         f'<a href="{url}">{url}</a></em></p>')
+    processed_content = process_images(html_content, book, preserve_image_links)
 
-    # Process images and update HTML content
-
-    processed_content = process_images(html_content, book, article_dir, title, preserve_image_links)
-
-    # Add content
-    content = epub.EpubHtml(title=title, file_name='content.xhtml', content=processed_content)
+    style = epub.EpubItem(uid='style', file_name='style.css', media_type='text/css', content=STYLESHEET)
+    book.add_item(style)
+    content = epub.EpubHtml(title=title, file_name='content.xhtml', lang=language, content=processed_content)
+    content.add_item(style)
     book.add_item(content)
 
     # Add default NCX and Nav file
@@ -194,38 +186,15 @@ def convert_to_epub(article: Article, preserve_image_links: bool = False) -> str
     # Basic spine without cover
     book.spine = [content]
 
-    # Save EPUB file
-    article_dir = os.path.join('./output/epubs', safe_dirname)
-    epub_path = os.path.join(article_dir, f"{title}.epub")
-    logger.debug(f"Saving EPUB to: {epub_path}")
-    epub.write_epub(epub_path, book)
-    logger.debug("EPUB file saved successfully")
+    slug = safe_filename(title)
+    article_dir = os.path.join('./output/epubs', slug)
+    os.makedirs(article_dir, exist_ok=True)
+    epub_path = os.path.join(article_dir, f"{slug}.epub")
+    temp_path = f"{epub_path}.{uuid.uuid4().hex}.tmp"
 
-    # Verify EPUB contents before cleanup
-    logger.debug("Verifying EPUB file contents...")
-    try:
-        import shutil
-        test_book = epub.read_epub(epub_path)
-        image_items = [item for item in test_book.items if isinstance(item, epub.EpubImage)]
-        logger.debug(f"Found {len(image_items)} images in EPUB file")
-
-        if len(image_items) > 0:
-            logger.debug("Cleaning up temporary image files")
-            # Cleanup images directory
-            for filename in os.listdir(article_dir):
-                filepath = os.path.join(article_dir, filename)
-                if os.path.isfile(filepath) and any(
-                        filepath.lower().endswith(ext) for ext in ['.jpg', '.jpeg', '.png', '.gif', '.webp']):
-                    try:
-                        os.remove(filepath)
-                        logger.debug(f"Removed temporary image file: {filename}")
-                    except Exception as e:
-                        logger.error(f"Failed to remove image file {filename}: {str(e)}")
-            logger.info("EPUB file contents verified successfully and temporary images removed.")
-        else:
-            logger.info("No images found in EPUB file!")
-    except Exception as e:
-        logger.error(f"Failed to verify EPUB contents: {str(e)}")
-        logger.warning("Keeping image directory for inspection")
-
+    # write_epub swallows IO errors and returns False, so check explicitly
+    if not epub.write_epub(temp_path, book) or not os.path.exists(temp_path):
+        raise RuntimeError(f"Failed to write EPUB file for '{title}'")
+    os.replace(temp_path, epub_path)  # atomic, so concurrent conversions never see a half-written file
+    logger.info(f"EPUB saved to {epub_path}")
     return epub_path

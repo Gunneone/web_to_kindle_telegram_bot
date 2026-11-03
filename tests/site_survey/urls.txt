@@ -1,0 +1,78 @@
+# Site survey URLs: one per line, '#' starts a comment.
+# Collected 2026-10-16 from RSS feeds. Paywalled controls are marked; everything else is free to read.
+# --- Medium
+https://netflixtechblog.com/measuring-the-impact-of-personalized-recommendations-4c26be3a4d96
+https://netflixtechblog.com/integrating-netflixs-foundation-model-into-personalization-applications-cf176b5860eb?source=rss----2615bd06b42e---4
+https://medium.com/blog/writers-distrust-ai-but-love-using-it-9c0c7830f435
+https://uxdesign.cc/nobody-feels-heard-by-a-report-c5a06d96bc39
+https://karpathy.medium.com/software-2-0-a64152b37c35
+https://karpathy.medium.com/yes-you-should-understand-backprop-e2f06eab496b
+https://medium.com/@rajkanjariya2020/the-problem-with-ai-agents-isnt-intelligence-it-s-authority-50bd18de566f
+https://medium.com/engineering-playbook/my-best-engineer-asked-me-to-remove-his-name-from-our-biggest-success-story-i-didnt-understand-why-327307fb0bfa
+https://pub.towardsai.net/how-to-ask-ai-a-question-it-cant-just-agree-with-54a159b9d274
+https://oliviadobbs13.medium.com/ocean-acidification-carbon-dioxides-second-crisis-4f9cec3f7efe
+https://medium.com/@willr45/finite-number-of-souls-1c11ba1c9e28
+# --- Substack
+https://www.astralcodexten.com/p/ai-safety-is-not-a-corporate-plot
+https://www.astralcodexten.com/p/your-book-review-we-present-television
+https://www.oneusefulthing.org/p/the-overhang
+https://simonw.substack.com/p/2026-in-llms-so-far
+https://www.noahpinion.blog/p/maybe-the-rapture-is-already-here
+https://thezvi.substack.com/p/arguments-about-ai-consciousness-b99
+https://garymarcus.substack.com/p/we-must-recall-open-ended-ai-agents
+https://aella.substack.com/p/the-hotness-curve-how-age-changes
+https://aella.substack.com/p/pt3-the-status-wars-of-apes
+https://www.sustainabilitybynumbers.com/p/population-growth-decline-climate
+https://substack.com/inbox/post/166333070
+https://substack.com/inbox/post/169101264
+https://substack.com/home/post/p-216098733
+https://open.substack.com/pub/simonw/p/2026-in-llms-so-far?r=abc12&utm_medium=ios
+https://substack.com/@noahpinion/p-219538380
+# --- indie / static
+http://paulgraham.com/greatwork.html
+https://danluu.com/look-stupid/
+https://jvns.ca/blog/2026/07/17/learning-about-running-sqlite/
+https://simonwillison.net/2026/Oct/12/python-3-15/
+https://lilianweng.github.io/posts/2024-11-28-reward-hacking/
+https://herman.bearblog.dev/on-reading-books/
+https://waitbutwhy.com/2015/01/artificial-intelligence-revolution-1.html
+https://elroy.bot/blog/2025/07/29/ai-is-a-floor-raiser-not-a-ceiling-raiser.html
+https://kottke.org/26/10/chromatic-inkscapes
+# --- platforms: Ghost / WordPress / Blogger / Hashnode / dev.to / LessWrong / beehiiv
+https://www.troyhunt.com/weekly-update-525/
+https://blog.codinghorror.com/you-cant-vibe-code-love/
+https://terrytao.wordpress.com/2026/10/15/why-are-we-even-doing-all-this/
+https://projectzero.google/2026/10/emergency-patching.html
+https://townhall.hashnode.com/hashnode-docs-free-license-for-open-source-projects
+https://dev.to/nabeelbaghoor/voicemail-detection-is-a-classifier-plan-for-both-ways-it-is-wrong-7hl
+https://www.lesswrong.com/posts/SwYBLQvo8MddDcCwz/cat-belling-problems
+https://www.superhuman.ai/p/meta-s-muse-is-coming-to-mac
+https://stackoverflow.blog/2026/10/16/formal-methods-say-you-re-wrong/
+https://smashingmagazine.com/2026/10/how-name-things/
+# --- company tech blogs
+https://blog.cloudflare.com/verified-bots-accountability/
+https://github.blog/engineering/architecture-optimization/from-2500-requests-to-24-rebuilding-star-history-without-the-stargazers/
+https://martinfowler.com/articles/are-harnesses-worth-the-cost.html
+https://hacks.mozilla.org/2026/08/intent-to-ship-jpeg-xl/
+# --- news / magazines (free)
+https://www.bbc.co.uk/news/articles/cvx284w16z1po
+https://www.theguardian.com/technology/2026/oct/14/zimbabwean-author-simbarashe-kundizeza-denies-ai-story
+https://www.npr.org/2026/10/16/nx-s1-6005201/health-treatment-menopause-hot-flash-night-sweats-insomnia
+https://www.aljazeera.com/economy/2026/10/16/meta-employees-say-lulas-accounts-restricted-in-brazil-election-report
+https://arstechnica.com/gaming/2026/10/us-rep-proposes-bill-to-give-video-game-buyers-ownership-not-a-license/
+https://theconversation.com/japans-mmx-mission-aims-to-swipe-soil-samples-from-mars-moon-phobos-294129
+https://www.propublica.org/article/missouri-plan-judge-selection-republican-attacks
+https://www.quantamagazine.org/how-do-fungi-keep-the-planet-healthy-20261015/
+https://aeon.co/essays/the-century-long-search-for-the-limits-to-knowledge
+https://techcrunch.com/2026/10/16/porsches-electric-macan-turbo-is-an-automotive-existential-crisis/
+https://www.engadget.com/2288908/if-memory-shortages-last-tech-companies-should-offer-cheap-battery-replacements/
+https://science.nasa.gov/missions/hubble/nasas-hubble-spies-spirals-edge/
+# --- reference / non-English
+https://en.wikipedia.org/wiki/Fridtjof_Nansen
+https://en.wikipedia.org/wiki/Fourier_transform
+https://www.tagesschau.de/ausland/europa/selenskyj-eu-gipfel-102.html
+https://www.spektrum.de/news/super-chandrasekhar-wenn-weisse-zwerge-schwerer-werden-als-erlaubt/2349363
+https://www.heise.de/news/Apple-Website-in-Frankreich-leakt-neues-iPad-mini-11490778.html
+# --- paywalled controls (expect a preview with a notice)
+https://www.noahpinion.blog/p/ai-vs-the-railroads
+https://garymarcus.substack.com/p/generative-ai-in-disarray

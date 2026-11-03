@@ -2,195 +2,120 @@
 Substack-specific content scraper.
 """
 
-import requests
-from bs4 import BeautifulSoup
-from datetime import datetime
 import logging
-from urllib.parse import urlparse
 import os
+from datetime import datetime
+from urllib.parse import urlparse
+
+from bs4 import BeautifulSoup
+
 from .article import Article
+from .errors import ExtractionError
+from .html_cleanup import build_header, promote_lazy_images, sanitize_for_kindle
+from .http import FetchResult, fetch
+from .metadata import extract_metadata
 
 logger = logging.getLogger(__name__)
+
+# Substack UI inside the post body: subscribe/share widgets, image zoom buttons, paywall CTA
+SUBSTACK_CHROME = [
+    '.subscription-widget-wrap', '.subscription-widget-wrap-editor', '.subscribe-widget', '.subscription-widget',
+    '.image-link-expand', '.post-ufi', '.share-dialog', '.button-wrapper', '.paywall', '.paywall-jump',
+    '.pc-display-flex', '.modal', '.popup', '.post-footer', '.footer',
+]
 
 
 class SubstackScraper:
     """Handles content extraction from Substack websites."""
 
     @staticmethod
-    def is_substack_site(url: str) -> bool:
+    def is_substack_url(url: str) -> bool:
+        """substack.com share links (inbox/home/@user/open.substack.com) and *.substack.com publications."""
+        host = (urlparse(url).hostname or '').lower()
+        return host == 'substack.com' or host.endswith('.substack.com')
+
+    @staticmethod
+    def is_substack_html(html: str) -> bool:
+        """Substack publications on custom domains (e.g. astralcodexten.com)."""
+        return 'substackcdn.com' in html and 'newsletter-post' in html
+
+    @classmethod
+    def is_substack_site(cls, url: str, html: str | None = None) -> bool:
         """
-        Determines if a URL is a Substack site by checking URL patterns and HTML content.
+        Determines if a URL is a Substack site by checking the URL and, for custom domains, the page HTML.
 
         Args:
             url (str): The URL to check
+            html (str): The page HTML, if already downloaded
 
         Returns:
             bool: True if the site is detected as Substack, False otherwise
         """
-        # First check the URL pattern - if it contains substack.com, it's definitely Substack
-        if 'substack.com' in url.lower():
-            return True
+        return cls.is_substack_url(url) or (html is not None and cls.is_substack_html(html))
 
-        # Check for common Substack URL patterns (like /p/ for posts)
-        parsed_url = urlparse(url)
-        path = parsed_url.path.lower()
-        if '/p/' in path:
-            # This could be Substack, let's verify by checking the HTML
-            try:
-                headers = {'User-Agent': 'Mozilla/5.0'}
-                response = requests.get(url, headers=headers, timeout=10)
-                if response.status_code == 200:
-                    html_content = response.text.lower()
-
-                    # Check for various Substack indicators in the HTML
-                    substack_indicators = [
-                        'substack',  # General Substack references
-                        'generator" content="substack',  # Meta generator tag
-                        'substack-app',  # Common Substack div ID
-                        'substackcdn.com',  # Substack CDN references
-                    ]
-
-                    # If any indicator is found, it's likely a Substack site
-                    for indicator in substack_indicators:
-                        if indicator in html_content:
-                            logger.info(f"Detected Substack site based on HTML indicator: {indicator}")
-                            return True
-
-            except Exception as e:
-                logger.warning(f"Could not verify Substack status for {url}: {str(e)}")
-                # Only assume it's Substack based on URL pattern if we can't check the HTML
-                # and the domain looks like it could reasonably be a Substack custom domain
-                hostname = parsed_url.hostname
-                if hostname and not hostname.endswith(('.gov', '.edu')) and '/p/' in path:
-                    # Be more conservative about well-known non-Substack platforms
-                    known_non_substack = ['medium.com', 'wordpress.com', 'blogspot.com', 'tumblr.com']
-                    if not any(platform in hostname.lower() for platform in known_non_substack):
-                        logger.info(f"Assuming Substack based on URL pattern /p/ for: {url}")
-                        return True
-
-        return False
-
-    def extract_content(self, url: str) -> Article:
+    def extract_content(self, url: str, fetched: FetchResult | None = None) -> Article:
         """
         Extracts the main article content from a Substack blog post URL.
 
         Args:
             url (str): The URL of the Substack blog post
+            fetched (FetchResult): The already downloaded page, if available
 
         Returns:
             Article: Article object containing extracted content
 
         Raises:
-            Exception: If the URL is invalid or content cannot be retrieved
+            ScraperError: If the page cannot be retrieved or has no article content
         """
         logger.info(f"Processing URL using Substack Extractor: {url}... ")
-        try:
-            # Send HTTP GET request
-            response = requests.get(url)
-            response.raise_for_status()
+        fetched = fetched or fetch(url)
+        return self.extract_from_html(url, fetched.final_url, fetched.html)
 
-            # Parse HTML content
-            soup = BeautifulSoup(response.text, 'html.parser')
+    def extract_from_html(self, url: str, final_url: str, html: str) -> Article:
+        soup = BeautifulSoup(html, 'lxml')
+        article = soup.find('article')
+        if article is None:
+            raise ExtractionError("Could not find article content")
 
-            # Find the main article content by looking for the article class
-            article_content = soup.find('article')
+        # Metadata comes from the page's JSON-LD (author, datePublished, publisher) and <meta> tags
+        meta = extract_metadata(html, final_url, soup=soup)
+        heading = article.find('h1')
+        title = meta.title or (heading.get_text(strip=True) if heading else 'Untitled')
+        subtitle_element = article.select_one('h3.subtitle')
+        subtitle = subtitle_element.get_text(strip=True) if subtitle_element else None
 
-            if article_content:
-                # extract author
-                author_element = soup.find('div', class_='profile-hover-card-target')
-                author = author_element.find('a').text.strip() if author_element else "Unknown Author"
+        # Paid posts: the page only contains the free preview, followed by a paywall CTA
+        is_preview = meta.is_accessible_for_free is False or soup.select_one('.paywall, [data-testid=paywall]') is not None
 
-                # Extract publication name from multiple potential sources
-                publication = self._extract_publication_name(soup, url)
+        promote_lazy_images(soup)
+        body = article.select_one('.available-content') or article.select_one('.body.markup') or article
+        for element in body.select('.post-header'):
+            element.decompose()
+        self._clean_article_content(body)
 
-                # extract title which is the first h1, that is not in a .pc-display-flex element
-                title = self._extract_title_and_add_metadata(soup, author, publication)
+        content = build_header(title, meta.author, meta.site_name, meta.published, subtitle)
+        content += sanitize_for_kindle(str(body), final_url)
 
-                # Remove share buttons, like buttons etc
-                self._clean_article_content(article_content)
+        self._save_content_to_file(content, title)
+        logger.info(f"Content extracted using Substack Extractor: '{title}' by {meta.author}"
+                    f"{' (paywalled preview)' if is_preview else ''}")
+        return Article(
+            url=url,
+            title=title,
+            author=meta.author,
+            published_at=meta.published,
+            content=content,
+            publication=meta.site_name,
+            language=meta.language,
+            is_preview=is_preview,
+        )
 
-                # Save content to file
-                self._save_content_to_file(article_content, title)
-
-                # create Article object with article_content, title and author
-                logger.info("Content extracted using Substack Extractor")
-                article = Article(
-                    url=url,
-                    title=title,
-                    author=author,
-                    published_at=datetime.now().isoformat(),
-                    content=str(article_content),
-                    publication=publication
-                )
-
-                return article
-            else:
-                raise Exception("Could not find article content")
-
-        except requests.RequestException as e:
-            raise Exception(f"Error fetching content: {str(e)}")
-        except Exception as e:
-            logger.error(f"Error processing Substack content: {str(e)}")
-            raise Exception(f"Error processing content: {str(e)}")
-
-    def _extract_publication_name(self, soup: BeautifulSoup, url: str) -> str:
-        """Extract publication name from meta tags or URL."""
-        publication = None
-
-        # Method 1: Check og:site_name meta tag
-        og_site_name = soup.find('meta', property='og:site_name')
-        if og_site_name and og_site_name.get('content'):
-            publication = og_site_name['content'].strip()
-            logger.info(f"Found publication name from og:site_name: {publication}")
-
-        # Method 2: If no og:site_name, try to extract from URL subdomain
-        if not publication:
-            parsed_url = urlparse(url)
-            hostname = parsed_url.hostname
-            if hostname and hostname.endswith('.substack.com') and hostname != 'substack.com':
-                subdomain = hostname.replace('.substack.com', '')
-                # Convert subdomain to title case and replace hyphens
-                publication = subdomain.replace('-', ' ').title()
-                logger.info(f"Extracted publication name from subdomain: {publication}")
-
-        return publication
-
-    def _extract_title_and_add_metadata(self, soup: BeautifulSoup, author: str, publication: str) -> str:
-        """Extract title and add author/publication metadata."""
-        h1_elements = soup.find_all('h1')
-        title = None
-
-        for h1 in h1_elements:
-            if not h1.find_parent(class_='pc-display-flex'):
-                title = h1.text.strip()
-
-                # Create and insert author heading and horizontal line after title
-                author_heading = soup.new_tag('h4')
-                author_heading.string = f"By {author}"
-                horizontal_line = soup.new_tag('hr')
-                horizontal_line['style'] = 'border-top: 1px solid #ccc; margin: 20px 0;'
-
-                # Add publication info if available
-                if publication:
-                    publication_heading = soup.new_tag('h5')
-                    publication_heading.string = f"From: {publication}"
-                    publication_heading['style'] = 'color: #666; font-style: italic; margin: 10px 0;'
-                    h1.insert_after(horizontal_line)
-                    h1.insert_after(publication_heading)
-                    h1.insert_after(author_heading)
-                else:
-                    h1.insert_after(horizontal_line)
-                    h1.insert_after(author_heading)
-                break
-
-        return title if title else "Unknown Title"
-
-    def _clean_article_content(self, article_content: BeautifulSoup) -> None:
+    def _clean_article_content(self, body) -> None:
         """Remove unwanted elements from article content."""
-        for element in article_content.select('.pc-display-flex, .button-wrapper, .modal, .popup'):
+        for element in body.select(', '.join(SUBSTACK_CHROME)):
             element.decompose()
 
-    def _save_content_to_file(self, article_content: BeautifulSoup, title: str) -> None:
+    def _save_content_to_file(self, content: str, title: str) -> None:
         """Save content to HTML file with safe filename."""
         safe_title = ''.join(c for c in title.lower() if c.isalnum() or c in ' -_')
         safe_title = safe_title.replace(' ', '-')[:70]
@@ -203,4 +128,4 @@ class SubstackScraper:
         file_path = os.path.join('./output/html', f"{safe_title}-{timestamp}.html")
 
         with open(file_path, "w", encoding='utf-8') as f:
-            f.write(str(article_content))
+            f.write(content)

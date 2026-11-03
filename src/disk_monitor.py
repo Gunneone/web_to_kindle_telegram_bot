@@ -24,8 +24,8 @@ logger = logging.getLogger(__name__)
 # Threshold for triggering cleanup (2GB in bytes)
 DISK_SPACE_THRESHOLD = 2 * 1024 * 1024 * 1024  # 2GB
 CHECK_INTERVAL = 300  # Check every 5 minutes
-HTML_DIR = './html'
-EPUBS_DIR = './epubs'
+HTML_DIR = './output/html'
+EPUBS_DIR = './output/epubs'
 
 
 def get_disk_usage() -> Tuple[int, int, int]:
