@@ -7,8 +7,11 @@ import asyncio
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from .. import db, delivery, keyboards
-from ..links import MAX_LINKS, extract_urls, looks_like_email
+from core import db
+from core.kindle import looks_like_email
+
+from .. import delivery, keyboards
+from ..links import MAX_LINKS, extract_urls
 from ..texts import t
 from . import onboarding, user_and_lang
 

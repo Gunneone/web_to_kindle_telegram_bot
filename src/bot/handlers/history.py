@@ -8,8 +8,10 @@ from telegram import Update
 from telegram.error import BadRequest
 from telegram.ext import ContextTypes
 
-from .. import db, keyboards
-from ..delivery import host
+from core import db
+from core.pipeline import host
+
+from .. import keyboards
 from ..texts import format_date, t
 from . import user_and_lang
 

@@ -1,70 +1,45 @@
 """
-Turning a link into a delivered book, with live progress in the chat:
-reactions on the user's message, one status message that is edited step by step and ends as the
-result card (or an error card with a retry button).
+The Telegram side of delivering a book: reactions on the user's message, one status message that
+is edited step by step and ends as the result card (or an error card with a retry button).
+The work itself (fetching, building, mailing, history) is in core.pipeline.
 """
 
-import asyncio
 import logging
 import os
 import traceback
-from collections import defaultdict
-from dataclasses import dataclass, field
 from datetime import date
 from html import escape
-from urllib.parse import urlparse
 
-from bs4 import BeautifulSoup
 from telegram import Bot, Message, ReplyParameters
 from telegram.error import BadRequest, TelegramError
 
-from email_sender import EmailError, send_email
-from epub_converter import convert_to_epub
+from core import db, pipeline
+from core.pipeline import Book, Failure, Outcome, Stage, host
 from web_scraper import Article as WebArticle
-from web_scraper import BlockedError, ExtractionError, ScraperError, get_website_content
 
-from . import db, keyboards
+from . import keyboards
 from .config import ADMIN_ID, MAX_UPLOAD_BYTES
 from .texts import format_date, format_size, resolve_lang, t
 
 logger = logging.getLogger(__name__)
 
-WORDS_PER_MINUTE = 230
 MAX_TITLE_LENGTH = 200
-
-# Scraping, image downloads and SMTP run in threads; keep a slow user from starving everyone else
-GLOBAL_SLOTS = asyncio.Semaphore(4)
-USER_SLOTS: dict[int, asyncio.Semaphore] = defaultdict(lambda: asyncio.Semaphore(2))
 
 REACT_RECEIVED = '👀'
 REACT_WORKING = '✍'
 REACT_DONE = '👌'
 REACT_FAILED = '💔'
 
-
-@dataclass
-class Book:
-    title: str
-    url: str
-    epub_path: str
-    author: str | None = None
-    publication: str | None = None
-    words: int | None = None
-    is_preview: bool = False
+STATUS_TEXTS = {Stage.QUEUED: 'status_queued', Stage.FETCHING: 'status_fetching',
+                Stage.BUILDING: 'status_building', Stage.SENDING: 'status_sending'}
+ERROR_TEXTS = {Failure.BLOCKED: 'err_blocked', Failure.EXTRACT: 'err_extract', Failure.FETCH: 'err_fetch',
+               Failure.EMAIL: 'err_email', Failure.UNKNOWN: 'err_unknown'}
 
 
-@dataclass
-class Result:
-    article_id: int | None
-    delivered: set[str] = field(default_factory=set)
-
-    @property
-    def ok(self) -> bool:
-        return bool(self.delivered)
-
-
-def host(url: str) -> str:
-    return urlparse(url).netloc.removeprefix('www.') or url
+def upsert_user(tg_user) -> db.User:
+    """The user's row, created on first contact, with their Telegram name kept current."""
+    return db.upsert_user(tg_user.id, username=tg_user.username, first_name=tg_user.first_name,
+                          last_name=tg_user.last_name)
 
 
 def who(tg_user) -> str:
@@ -73,10 +48,6 @@ def who(tg_user) -> str:
 
 def reply_to(message_id: int | None) -> ReplyParameters | None:
     return ReplyParameters(message_id, allow_sending_without_reply=True) if message_id else None
-
-
-def word_count(html: str) -> int:
-    return len(BeautifulSoup(html or '', 'html.parser').get_text(' ').split())
 
 
 def card_text(lang: str, book: Book, delivered: set[str]) -> str:
@@ -88,10 +59,11 @@ def card_text(lang: str, book: Book, delivered: set[str]) -> str:
     if byline:
         lines.append(' · '.join(byline))
     stats = []
-    if book.words:
-        stats.append(t(lang, 'card_read_time', minutes=max(1, round(book.words / WORDS_PER_MINUTE))))
-    if os.path.exists(book.epub_path):
-        stats.append(format_size(lang, os.path.getsize(book.epub_path)))
+    if book.read_minutes:
+        stats.append(t(lang, 'card_read_time', minutes=book.read_minutes))
+    size = book.size
+    if size is not None:
+        stats.append(format_size(lang, size))
     if stats:
         lines.append(' · '.join(stats))
     if book.is_preview:
@@ -167,135 +139,101 @@ class Progress:
             self.message = None
 
 
+class Chat(pipeline.Frontend):
+    """A delivery followed in a Telegram chat; the EPUB file arrives there as a document."""
+
+    max_file_bytes = MAX_UPLOAD_BYTES
+
+    def __init__(self, bot: Bot, user: db.User, lang: str, chat_id: int, progress: Progress,
+                 reply_to_id: int | None):
+        self.bot = bot
+        self.user = user
+        self.lang = lang
+        self.chat_id = chat_id
+        self.progress = progress
+        self.reply_to_id = reply_to_id
+
+    async def stage(self, stage: Stage, article: db.Article) -> None:
+        if stage == Stage.RECEIVED:
+            await self.progress.react(REACT_RECEIVED)
+            return
+        await self.progress.show(STATUS_TEXTS[stage])
+        if stage == Stage.BUILDING:
+            await self.progress.react(REACT_WORKING)
+
+    async def deliver_file(self, article: db.Article, book: Book, delivered: set[str]) -> None:
+        await self.progress.show('status_uploading')
+        delivered = delivered | {db.TELEGRAM}
+        with open(book.epub_path, 'rb') as document:
+            await self.bot.send_document(
+                self.chat_id, document, filename=os.path.basename(book.epub_path),
+                caption=card_text(self.lang, book, delivered),
+                reply_markup=keyboards.result_card(self.lang, article.id, book.url, delivered, self.user,
+                                                   book.is_preview),
+                reply_parameters=reply_to(self.reply_to_id))
+        await self.progress.remove()
+
+
 async def deliver(bot: Bot, tg_user, chat_id: int, url: str, *, reply_to_id: int | None = None,
                   targets: set[str] | None = None, article_id: int | None = None, force: bool = False,
-                  react: bool = True, show_source: bool = False, status_message: Message | None = None) -> Result:
+                  react: bool = True, show_source: bool = False, status_message: Message | None = None) -> Outcome:
     """
-    Fetch an article, build the EPUB and deliver it to the Kindle and/or this chat.
+    Deliver the article at `url` (see core.pipeline.run) and show it in this chat.
 
-    targets:        where to deliver; default is the user's delivery setting
-    article_id:     history entry to reuse (resend, retry); its EPUB is reused while it's still on disk
-    force:          skip the "you already got this" check
+    targets, article_id, force: as in core.pipeline.run
     react:          show progress as reactions on the message `reply_to_id` (the user's link message)
     show_source:    start the status message with the link (when it isn't a reply to the link itself)
     status_message: an existing bot message to turn into the status message (retry buttons)
     """
-    user = db.upsert_user(tg_user)
+    user = upsert_user(tg_user)
     lang = resolve_lang(user, tg_user)
-    targets = targets or user.targets
-
-    if not force and article_id is None:
-        previous = db.recent_delivery(user.user_id, url)
-        if previous:
-            await bot.send_message(
-                chat_id, t(lang, 'duplicate', title=previous.title or host(url),
-                           date=format_date(lang, previous.timestamp)),
-                reply_markup=keyboards.duplicate(lang, previous.id), reply_parameters=reply_to(reply_to_id))
-            return Result(previous.id)
-
-    article = db.get_article(article_id) if article_id else None
-    if article is None:
-        article = db.create_article(user.user_id, url)
-    reuse = (article_id is not None and article.status in (*db.DELIVERED, None)
-             and bool(article.epub_path) and os.path.exists(article.epub_path))
-
     progress = Progress(bot, chat_id, lang, url, reply_to_id=reply_to_id, react=react,
                         show_source=show_source, message=status_message)
-    await progress.react(REACT_RECEIVED)
-    user_slots = USER_SLOTS[user.user_id]
-    if user_slots.locked() or GLOBAL_SLOTS.locked():
-        await progress.show('status_queued')
+    outcome = await pipeline.run(user, url, Chat(bot, user, lang, chat_id, progress, reply_to_id),
+                                 targets=targets, article_id=article_id, force=force)
 
-    async with user_slots, GLOBAL_SLOTS:
-        delivered: set[str] = set()
+    if outcome.duplicate:
+        previous = outcome.duplicate
+        await bot.send_message(
+            chat_id, t(lang, 'duplicate', title=previous.title or host(url),
+                       date=format_date(lang, previous.timestamp)),
+            reply_markup=keyboards.duplicate(lang, previous.id), reply_parameters=reply_to(reply_to_id))
+    elif outcome.failure:
+        await _show_error(progress, lang, outcome, url)
+        if outcome.failure not in pipeline.USER_FACING:
+            await notify_admin(bot, error_report(tg_user, url, outcome.error))
+    else:
+        await _show_result(progress, lang, user, url, outcome)
+        if outcome.delivered:
+            preview = ' (preview)' if outcome.book.is_preview else ''
+            await notify_admin(bot, f"📚 {escape(outcome.book.title)}{preview} → {escape(who(tg_user))} "
+                                    f"via {', '.join(sorted(outcome.delivered))}")
+    return outcome
+
+
+async def _show_result(progress: Progress, lang: str, user: db.User, url: str, outcome: Outcome) -> None:
+    """The result card, unless the EPUB in the chat already is one."""
+    book = outcome.book
+    if progress.message is not None or not outcome.delivered:
+        text = card_text(lang, book, outcome.delivered)
+        offered = outcome.delivered
+        if outcome.file_too_big:
+            text += '\n\n' + t(lang, 'file_too_big', size=format_size(lang, outcome.file_too_big))
+            offered = offered | {db.TELEGRAM}  # no "EPUB here" button when the file is too big for Telegram
         try:
-            if reuse:
-                book = Book(title=article.title or host(url), url=url, epub_path=article.epub_path,
-                            is_preview=article.status == db.PREVIEW)
-            else:
-                await progress.show('status_fetching')
-                content = await asyncio.to_thread(get_website_content, url)
-                await progress.show('status_building')
-                await progress.react(REACT_WORKING)
-                epub_path = await asyncio.to_thread(convert_to_epub, content, user.image_links)
-                words = await asyncio.to_thread(word_count, content.Content)
-                book = Book(title=content.Title or host(url), url=url, epub_path=epub_path,
-                            author=content.Author, publication=content.Publication,
-                            words=words, is_preview=bool(content.Is_Preview))
-                db.update_article(article.id, title=book.title, epub_path=epub_path)
-
-            if db.KINDLE in targets:
-                await progress.show('status_sending')
-                await asyncio.to_thread(send_email, user.kindle_email, book.epub_path)
-                delivered.add(db.KINDLE)
-
-            too_big = None
-            if db.TELEGRAM in targets:
-                size = os.path.getsize(book.epub_path)
-                if size > MAX_UPLOAD_BYTES:
-                    too_big = t(lang, 'file_too_big', size=format_size(lang, size))
-                else:
-                    await progress.show('status_uploading')
-                    delivered.add(db.TELEGRAM)
-                    with open(book.epub_path, 'rb') as document:
-                        await bot.send_document(
-                            chat_id, document, filename=os.path.basename(book.epub_path),
-                            caption=card_text(lang, book, delivered),
-                            reply_markup=keyboards.result_card(lang, article.id, url, delivered, user,
-                                                               book.is_preview),
-                            reply_parameters=reply_to(reply_to_id))
-                    await progress.remove()
-
-            if progress.message is not None or not delivered:
-                text = card_text(lang, book, delivered)
-                if too_big:
-                    text += '\n\n' + too_big
-                # No "EPUB here" button when the file is too big for Telegram
-                offered = delivered | ({db.TELEGRAM} if too_big else set())
-                await progress.finish(text, keyboards.result_card(lang, article.id, url, offered, user,
-                                                                  book.is_preview))
-
-            if delivered:
-                db.update_article(article.id, status=db.PREVIEW if book.is_preview else db.SENT, error=None,
-                                  timestamp=db.utcnow())
-                if db.KINDLE in delivered:
-                    db.update_user(user.user_id, last_book_received_date=date.today().isoformat())
-            elif not reuse:
-                db.update_article(article.id, status=db.FAILED, error='EPUB too large for Telegram')
-            await progress.react(REACT_DONE if delivered else REACT_FAILED)
-            logger.info(f"Delivered '{book.title}' to {who(tg_user)} via {sorted(delivered)}")
-            if delivered:
-                preview = ' (preview)' if book.is_preview else ''
-                await notify_admin(bot, f"📚 {escape(book.title)}{preview} → {escape(who(tg_user))} "
-                                        f"via {', '.join(sorted(delivered))}")
-            return Result(article.id, delivered)
-
-        except ScraperError as e:
-            # Blocked sites, paywalls, timeouts, pages without article text: the message explains it
-            logger.warning(f"Could not process URL {url}: {e}")
-            key = ('err_blocked' if isinstance(e, BlockedError)
-                   else 'err_extract' if isinstance(e, ExtractionError) else 'err_fetch')
-            await _fail(progress, lang, article, url, key, e, keep_status=reuse)
-        except EmailError as e:
-            logger.error(f"Could not email {url} to {who(tg_user)}: {e}")
-            await _fail(progress, lang, article, url, 'err_email', e, keep_status=reuse, detail=False)
-            await notify_admin(bot, error_report(tg_user, url, e))
-        except Exception as e:
-            logger.exception(f"Error processing URL {url}")
-            await _fail(progress, lang, article, url, 'err_unknown', e, keep_status=reuse, detail=False)
-            await notify_admin(bot, error_report(tg_user, url, e))
-        return Result(article.id, delivered)
+            await progress.finish(text, keyboards.result_card(lang, outcome.article_id, url, offered, user,
+                                                              book.is_preview))
+        except TelegramError as e:
+            logger.warning(f"Could not show the result card: {e}")
+    await progress.react(REACT_DONE if outcome.delivered else REACT_FAILED)
 
 
-async def _fail(progress: Progress, lang: str, article: db.Article, url: str, key: str, error: Exception,
-                *, keep_status: bool, detail: bool = True) -> None:
-    if not keep_status:
-        db.update_article(article.id, status=db.FAILED, error=str(error)[:500])
-    text = progress.source + t(lang, key)
-    if detail and str(error):
-        text += f"\n<blockquote expandable>{escape(str(error))}</blockquote>"
+async def _show_error(progress: Progress, lang: str, outcome: Outcome, url: str) -> None:
+    text = progress.source + t(lang, ERROR_TEXTS[outcome.failure])
+    if outcome.failure in pipeline.USER_FACING and str(outcome.error):
+        text += f"\n<blockquote expandable>{escape(str(outcome.error))}</blockquote>"
     try:
-        await progress.finish(text, keyboards.error_card(lang, article.id, url))
+        await progress.finish(text, keyboards.error_card(lang, outcome.article_id, url))
     except TelegramError as e:
         logger.warning(f"Could not show the error card: {e}")
     await progress.react(REACT_FAILED)
@@ -312,5 +250,4 @@ async def send_test_book(bot: Bot, user: db.User, lang: str) -> None:
         content=t(lang, 'test_book_body', bot=bot.username),
         language=lang,
     )
-    epub_path = await asyncio.to_thread(convert_to_epub, article)
-    await asyncio.to_thread(send_email, user.kindle_email, epub_path)
+    await pipeline.email_article(article, user.kindle_email)

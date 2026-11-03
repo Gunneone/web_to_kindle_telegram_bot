@@ -9,7 +9,9 @@ from telegram import Update
 from telegram.error import BadRequest
 from telegram.ext import ContextTypes
 
-from .. import db, keyboards, profile
+from core import db
+
+from .. import keyboards, profile
 from ..texts import LANGUAGE_NAMES, LANGUAGES, Raw, t
 from . import onboarding, user_and_lang
 

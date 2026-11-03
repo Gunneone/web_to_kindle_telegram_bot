@@ -164,10 +164,13 @@ the language, to send a test book or to delete your data.
 3. **Sending Emails:**
    - The `email_sender.py` sends the generated EPUB to the user's Kindle email via an SMTP server.
 
-4. **Telegram Interface:**
-   - Users interact with the bot using straightforward commands to configure their Kindle email, toggle settings, and process articles from any website.
+4. **Delivery Service:**
+   - `src/core/` is shared by every front end: the user and history database (`db.py`), Kindle address checks (`kindle.py`) and the pipeline that fetches, builds, mails and records each book (`pipeline.py`). It doesn't depend on Telegram, so another front end, such as a web app, can reuse it as-is.
 
-5. **Automatic File Management:**
+5. **Telegram Interface:**
+   - `src/bot/` is the Telegram front end on top of `core`. Users interact with the bot using straightforward commands to configure their Kindle email, toggle settings, and process articles from any website.
+
+6. **Automatic File Management:**
    - The `disk_monitor.py` service continuously monitors disk space and automatically removes the oldest HTML and EPUB files when available space falls below 2GB, ensuring the system doesn't run out of storage while preserving recent files for debugging purposes.
 
 ---

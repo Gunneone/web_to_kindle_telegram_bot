@@ -11,7 +11,9 @@ from telegram.constants import ParseMode
 from telegram.ext import (Application, CallbackQueryHandler, CommandHandler, ContextTypes, Defaults,
                           MessageHandler, filters)
 
-from . import db, delivery, profile
+from core import db
+
+from . import delivery, profile
 from .config import TOKEN
 from .handlers import articles, guest, history, messages, onboarding, settings, start
 

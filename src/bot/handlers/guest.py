@@ -11,7 +11,9 @@ from uuid import uuid4
 from telegram import InlineQueryResultArticle, InputTextMessageContent, Update
 from telegram.ext import ContextTypes
 
-from .. import db, delivery, keyboards
+from core import db
+
+from .. import delivery, keyboards
 from ..links import MAX_LINKS, extract_urls
 from ..texts import resolve_lang, t
 
