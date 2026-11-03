@@ -170,8 +170,8 @@ class TestDiskMonitor(unittest.TestCase):
             self.assertTrue(os.path.exists(filepath))
         
         # Patch the directory constants to point to our test directories
-        with patch('disk_monitor.HTML_DIR', self.html_dir), \
-             patch('disk_monitor.EPUBS_DIR', self.epubs_dir):
+        with patch('src.disk_monitor.HTML_DIR', self.html_dir), \
+             patch('src.disk_monitor.EPUBS_DIR', self.epubs_dir):
             
             # Simulate low disk space (need to free some bytes)
             space_freed = cleanup_old_files(1024)  # Very small threshold to trigger cleanup
