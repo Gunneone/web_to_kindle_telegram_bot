@@ -432,6 +432,30 @@ class TestEpubConverter(unittest.TestCase):
         self.assertNotIn('<img', xhtml)
         self.assertIn('[Image: A diagram]', xhtml)
 
+    def test_same_title_never_shares_a_file(self):
+        def convert(url, title, body):
+            return self.converter.convert_to_epub(Article(url, title, None, None, f'<p>{body}</p>'))
+
+        books = {
+            convert('https://a.example/notes', 'Weekly notes', 'First'): ('weekly-notes.epub', 'First'),
+            convert('https://b.example/notes', 'Weekly notes', 'Second'): ('weekly-notes.epub', 'Second'),
+            convert('https://a.example/notes', 'Weekly notes', 'Updated'): ('weekly-notes.epub', 'Updated'),
+            convert('https://c.example/1', None, 'Untitled one'): ('untitled.epub', 'Untitled one'),
+            convert('https://c.example/2', None, 'Untitled two'): ('untitled.epub', 'Untitled two'),
+        }
+        self.assertEqual(len(books), 5)  # five conversions, five different paths
+        for path, (name, body) in books.items():
+            self.assertEqual(os.path.basename(path), name)  # the name readers see stays the title slug
+            with zipfile.ZipFile(path) as epub_zip:  # and each file still holds its own article
+                self.assertIn(body, epub_zip.read('EPUB/content.xhtml').decode())
+
+        # The disk monitor finds every book in the new layout and leaves no directories behind
+        import disk_monitor
+        found = [path for path, _ in disk_monitor.get_files_by_age(disk_monitor.EPUBS_DIR, '*.epub')]
+        self.assertEqual(sorted(map(os.path.normpath, found)), sorted(map(os.path.normpath, books)))
+        disk_monitor.cleanup_old_files(0)
+        self.assertEqual(os.listdir(disk_monitor.EPUBS_DIR), [])
+
 
 if __name__ == '__main__':
     unittest.main()

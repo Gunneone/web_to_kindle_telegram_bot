@@ -126,7 +126,12 @@ def update_user(user_id: int, **fields) -> User | None:
 
 
 def delete_user_data(user_id: int) -> None:
-    """Remove the user, their history and the EPUB files nobody else's history points to."""
+    """
+    Remove the user, their history and the EPUB files nobody else's history points to.
+
+    Every conversion gets its own directory, so a path is shared only by rows written before that
+    (the path used to be derived from the title alone).
+    """
     with Session() as session:
         articles = session.query(Article).filter_by(user_id=user_id).all()
         paths = {a.epub_path for a in articles if a.epub_path}
@@ -140,6 +145,7 @@ def delete_user_data(user_id: int) -> None:
     for path in paths - shared:
         try:
             os.remove(path)
+            os.rmdir(os.path.dirname(path))  # the book's own directory; left alone unless empty
         except OSError:
             pass
 

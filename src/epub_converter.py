@@ -1,8 +1,10 @@
 import base64
+import hashlib
 import io
 import logging
 import os
 import re
+import shutil
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from html import escape
@@ -21,6 +23,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+EPUBS_DIR = './output/epubs'  # one directory per conversion: <url hash>-<random>/<title slug>.epub
 MAX_IMAGES = 300
 MAX_IMAGE_WIDTH = 1600
 DOWNLOAD_WORKERS = 8
@@ -186,15 +189,18 @@ def convert_to_epub(article: Article, preserve_image_links: bool = False) -> str
     # Basic spine without cover
     book.spine = [content]
 
-    slug = safe_filename(title)
-    article_dir = os.path.join('./output/epubs', slug)
-    os.makedirs(article_dir, exist_ok=True)
-    epub_path = os.path.join(article_dir, f"{slug}.epub")
-    temp_path = f"{epub_path}.{uuid.uuid4().hex}.tmp"
+    # The file name is what readers see (Telegram attachment, Kindle library), so it stays the readable slug.
+    # The directory is new for every conversion: articles that share a title, or have none, never share a file.
+    url_hash = hashlib.sha256(article.URL.encode()).hexdigest()[:10]
+    book_dir = os.path.join(EPUBS_DIR, f"{url_hash}-{uuid.uuid4().hex[:12]}")
+    os.makedirs(book_dir)  # no exist_ok: a reused directory would be a shared file, so fail instead
+    epub_path = os.path.join(book_dir, f"{safe_filename(title)}.epub")
+    temp_path = f"{epub_path}.tmp"
 
     # write_epub swallows IO errors and returns False, so check explicitly
     if not epub.write_epub(temp_path, book) or not os.path.exists(temp_path):
+        shutil.rmtree(book_dir, ignore_errors=True)
         raise RuntimeError(f"Failed to write EPUB file for '{title}'")
-    os.replace(temp_path, epub_path)  # atomic, so concurrent conversions never see a half-written file
+    os.replace(temp_path, epub_path)  # atomic, so a reader never sees a half-written file
     logger.info(f"EPUB saved to {epub_path}")
     return epub_path
