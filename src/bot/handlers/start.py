@@ -5,7 +5,9 @@
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from .. import db, keyboards
+from core import db
+
+from .. import keyboards
 from ..config import SENDER_EMAIL
 from ..links import MAX_LINKS
 from ..texts import t

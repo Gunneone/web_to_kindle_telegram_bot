@@ -18,7 +18,8 @@ Base = declarative_base()
 engine = create_engine(os.getenv('DATABASE_URL', 'sqlite:///users.db'))
 Session = sessionmaker(bind=engine, expire_on_commit=False)
 
-# Where books go
+# Where books go. TELEGRAM is the EPUB file handed over by the front end itself: a file in the
+# Telegram chat (a web app would offer a download); the stored value stays 'telegram'.
 KINDLE = 'kindle'
 TELEGRAM = 'telegram'
 BOTH = 'both'
@@ -93,16 +94,17 @@ def check_and_create_columns():
                     connection.execute(text(f'ALTER TABLE {table.name} ADD COLUMN {column.name} {column.type}'))
 
 
-def upsert_user(tg_user) -> User:
-    """Create the user on first contact and keep their Telegram name current."""
+def upsert_user(user_id: int, *, username: str | None = None, first_name: str | None = None,
+                last_name: str | None = None) -> User:
+    """Create the user on first contact and keep their name current."""
     with Session() as session:
-        user = session.get(User, tg_user.id)
+        user = session.get(User, user_id)
         if not user:
-            user = User(user_id=tg_user.id, preserve_image_links=0, setup_verified=0)
+            user = User(user_id=user_id, preserve_image_links=0, setup_verified=0)
             session.add(user)
-        user.username = tg_user.username
-        user.first_name = tg_user.first_name
-        user.last_name = tg_user.last_name
+        user.username = username
+        user.first_name = first_name
+        user.last_name = last_name
         session.commit()
         return user
 

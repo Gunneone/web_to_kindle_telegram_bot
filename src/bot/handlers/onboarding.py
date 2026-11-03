@@ -8,9 +8,11 @@ from telegram import ForceReply, Update
 from telegram.error import BadRequest, TelegramError
 from telegram.ext import ContextTypes
 
-from .. import db, delivery, keyboards
+from core import db
+from core.kindle import is_kindle_email, looks_like_email, normalize_email
+
+from .. import delivery, keyboards
 from ..config import CONFETTI_EFFECT_ID, SENDER_EMAIL, amazon_settings_url
-from ..links import is_kindle_email, looks_like_email, normalize_email
 from ..texts import t
 from . import user_and_lang
 

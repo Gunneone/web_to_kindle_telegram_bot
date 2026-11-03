@@ -5,7 +5,9 @@ Buttons on result cards, error cards, duplicate notices and the history list.
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from .. import db, delivery
+from core import db
+
+from .. import delivery
 from ..texts import t
 from . import onboarding, user_and_lang
 

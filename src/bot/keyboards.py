@@ -5,7 +5,8 @@ Inline keyboards. Callback data is '<area>:<action>[:<arg>]' and always ≤ 64 b
 from telegram import CopyTextButton, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import KeyboardButtonStyle
 
-from . import db
+from core import db
+
 from .texts import LANGUAGE_NAMES, LANGUAGES, t
 
 PRIMARY = KeyboardButtonStyle.PRIMARY

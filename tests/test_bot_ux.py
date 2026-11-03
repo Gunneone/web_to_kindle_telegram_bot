@@ -18,19 +18,22 @@ from pathlib import Path
 SRC = Path(__file__).resolve().parent.parent / 'src'
 sys.path.insert(0, str(SRC))
 
-# The bot's database module connects on import; point it at a scratch file first
+# The database module connects on import; point it at a scratch file first
 _DB_DIR = tempfile.mkdtemp()
 _DB_PATH = os.path.join(_DB_DIR, 'users.db')
 os.environ['DATABASE_URL'] = f'sqlite:///{_DB_PATH}'
 
 from telegram import Message, MessageEntity  # noqa: E402
 
-from bot import db, keyboards  # noqa: E402
+from core import db  # noqa: E402
+from core.kindle import is_kindle_email, looks_like_email, normalize_email  # noqa: E402
+from core.pipeline import word_count  # noqa: E402
+from bot import keyboards  # noqa: E402
 from bot.config import amazon_settings_url  # noqa: E402
-from bot.delivery import Book, card_text, word_count  # noqa: E402
+from bot.delivery import Book, card_text, upsert_user  # noqa: E402
 from bot.handlers import history as history_screen  # noqa: E402
 from bot.handlers import settings as settings_screen  # noqa: E402
-from bot.links import MAX_LINKS, extract_urls, is_kindle_email, looks_like_email, normalize_email  # noqa: E402
+from bot.links import MAX_LINKS, extract_urls  # noqa: E402
 from bot.profile import COMMANDS  # noqa: E402
 from bot.texts import LANGUAGES, TEXTS, Raw, format_date, format_size, resolve_lang, t  # noqa: E402
 
@@ -369,7 +372,7 @@ class StorageTest(unittest.TestCase):
                          {db.TELEGRAM})
 
     def test_history_paging_and_duplicates(self):
-        user = db.upsert_user(TgUser(200))
+        user = upsert_user(TgUser(200))
         ids = []
         for i in range(7):
             article = db.create_article(user.user_id, f'https://example.com/{i}')
@@ -392,7 +395,7 @@ class StorageTest(unittest.TestCase):
         self.assertIsNone(db.recent_delivery(user.user_id, 'https://example.com/3'))  # too long ago
 
     def test_settings_panel(self):
-        user = db.upsert_user(TgUser(300))
+        user = upsert_user(TgUser(300))
         text, _ = settings_screen.render(user, 'de')
         self.assertIn(t('de', 'not_set'), text)
         self.assertIn(t('de', 'delivery_telegram'), text)
@@ -402,14 +405,14 @@ class StorageTest(unittest.TestCase):
         self.assertIn(t('en', 'delivery_both'), text)
 
     def test_delete_user_data(self):
-        user = db.upsert_user(TgUser(400))
+        user = upsert_user(TgUser(400))
         epub = os.path.join(_DB_DIR, 'mine.epub')
         shared = os.path.join(_DB_DIR, 'shared.epub')
         for path in (epub, shared):
             Path(path).write_bytes(b'x')
         db.update_article(db.create_article(user.user_id, 'https://e.com/a').id, epub_path=epub, status=db.SENT)
         db.update_article(db.create_article(user.user_id, 'https://e.com/b').id, epub_path=shared, status=db.SENT)
-        other = db.upsert_user(TgUser(401))
+        other = upsert_user(TgUser(401))
         db.update_article(db.create_article(other.user_id, 'https://e.com/b').id, epub_path=shared, status=db.SENT)
 
         db.delete_user_data(user.user_id)
