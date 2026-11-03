@@ -11,10 +11,10 @@ Or deploy your own instance using the instructions below.
 ## Quick Start
 
 ### Option 1: Use the Deployed Bot (Easiest)
-1. Visit [@SubstackKindleBot](https://t.me/SubstackKindleBot) on Telegram
-2. Send `/start` to begin
-3. Configure your Kindle email with `/config`
-4. Send any article URL to convert and receive on your Kindle
+1. Visit [@SubstackKindleBot](https://t.me/SubstackKindleBot) on Telegram ([open setup directly](https://t.me/SubstackKindleBot?start=setup))
+2. Send `/start` and tap **Set up Kindle** (or **Just send me EPUB files** if you don't use a Kindle)
+3. Follow the three steps: Kindle address → approve the sender at Amazon → test book
+4. Send any article link, or share it to the bot from your browser
 
 ### Option 2: Use the CLI Tool (For Developers)
 ```bash
@@ -38,6 +38,13 @@ Follow the full installation instructions below.
 - Integrates with a Telegram bot for an intuitive user interface.
 - Sends the EPUB file to the user's Kindle email address.
 - Allows configuration of Kindle email within the bot.
+- **Guided setup:** a three-step wizard with a copy button for the sender address, a link to Amazon's settings and a test book that confirms delivery works.
+- **Live progress:** reactions on your message (👀 → ✍ → 👌) and a status message that turns into a result card with buttons (original, EPUB here, resend).
+- **Kindle, chat or both:** books go to your Kindle, arrive in the chat as EPUB files (for Kobo, Apple Books, …), or both. A link sent before setup is delivered to the chat right away.
+- **Links from anywhere:** plain links, hyperlinked text, photo captions and forwarded posts, up to 10 links per message.
+- **History & resend:** `/history` lists your recent books; sending a link again within 30 days asks first.
+- **Guest mode:** in any chat, reply to a message with a link and mention the bot; the book is delivered via your private chat with it.
+- **English and German:** messages, command menu and bot description follow your Telegram language, or the language picked in `/settings`.
 - **Configurable image link preservation:** Toggle whether to preserve clickable links on images (useful for zoom functionality).
 - **Automatic file cleanup:** Monitors disk space and automatically deletes old HTML and EPUB files when space is low (below 2GB) to prevent storage issues while keeping recent files for debugging.
 
@@ -91,13 +98,20 @@ Follow the full installation instructions below.
    # SMTP configuration
    SMTP_HOST=your_smtp_server
    SMTP_PORT=587
+
+   # Optional: Telegram chat ID that gets a notice (title + user) per book and error reports
+   ADMIN_ID=123456789
    ```
+
+   The bot sets its command menu and description (English and German) itself on startup.
+   To allow guest mode (mentioning the bot in chats it isn't a member of), enable it for your bot in
+   [@BotFather](https://t.me/BotFather).
 
 4. **Run the Bot:**
 
    **Option A: Direct Python execution**
    ```bash
-   python telegram_bot.py
+   python src/telegram_bot.py
    ```
 
    **Option B: Using Docker Compose (Recommended for production)**
@@ -111,32 +125,31 @@ Follow the full installation instructions below.
 
 ## Usage
 
-### 1. **Start the Bot:**
+### 1. Start and set up
 
-   Use `/start` to initialize the bot and view a welcome message.
+Send `/start`. New users choose between **Set up Kindle** and **Just send me EPUB files**. The Kindle setup
+takes three steps:
 
-### 2. **Configure Kindle Email:**
+1. **Kindle address:** send the address of your Kindle (ends in `@kindle.com`, `@free.kindle.com` or `@kindle.cn`).
+2. **Approve the sender:** add the bot's sending address (`EMAIL_FROM`) to the *Approved Personal Document
+   E-mail List* in your Amazon settings. The bot shows the address with a copy button and links to Amazon.
+3. **Test book:** the bot sends a one-page book. If it doesn't arrive, tap **No** for a troubleshooting checklist.
 
-   Use `/config` to set or update your Kindle email. You will be prompted to input an email address ending in `@kindle.com`.
+### 2. Send an article
 
-### 3. **Configure Settings:**
+Paste a link, share it to the bot from your browser or app, or forward a post that contains links. Each link
+gets a status message that ends as a result card with **Original**, **EPUB here** and **Resend** buttons.
+Failed links get a **Retry** button.
 
-   Use `/settings` to view your current configuration, including:
-   - Kindle email address
-   - Image link preservation setting
+### 3. From any chat (guest mode)
 
-### 4. **Toggle Image Link Preservation:**
+Reply to a message that contains a link and mention the bot. The chat gets a short confirmation (no personal
+details); the book is delivered and confirmed in your private chat with the bot.
 
-   Use `/imagelinks` to toggle whether clickable links on images are preserved in the EPUB. When enabled, you can click on images to zoom or view full resolution versions.
+### 4. Settings
 
-### 5. **Send an Article:**
-
-   Use `/send` followed by any web article URL to send content directly to your Kindle. Alternatively:
-   - Send `/send` without an URL, and the bot will prompt you to provide a link.
-
-### 6. **Approve the Sender's Email:**
-
-   Add `EMAIL_FROM` (as set in `.env`) to your approved senders list at [Amazon Kindle Settings](https://www.amazon.com/myk).
+`/settings` opens one panel to change the Kindle address, the delivery (Kindle, chat or both), image links,
+the language, to send a test book or to delete your data.
 
 ---
 
@@ -161,11 +174,15 @@ Follow the full installation instructions below.
 
 ## Bot Commands
 
-- `/start` - Initialize the bot and view welcome message
-- `/config` - Configure or update your Kindle email address  
-- `/settings` - View all current settings (email, image link preservation)
-- `/imagelinks` - Toggle image link preservation on/off
-- `/cancel` - Cancel current operation
+- `/start` - Welcome screen and setup (deep links: `?start=setup`, `?start=settings`, `?start=help`)
+- `/settings` - Kindle address, delivery, image links, language, test book, delete data
+- `/history` - Your recent books, with a button to send each one again
+- `/help` - How to send links and what to check when nothing arrives
+- `/privacy` - What the bot stores, and a button to delete your data
+- `/send <link>` - Send a link (plain links work without the command)
+- `/cancel` - Stop entering a Kindle address
+
+`/config`, `/imagelinks` and `/delete` from earlier versions still work but are no longer in the menu.
 
 ## CLI Usage
 

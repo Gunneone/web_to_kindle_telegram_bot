@@ -9,6 +9,10 @@ from email.utils import formatdate, make_msgid
 from dotenv import load_dotenv
 
 
+class EmailError(Exception):
+    """The mail server could not be reached or refused the message."""
+
+
 def send_email(email_to: str, attachment_path: str) -> None:
     """
     Send an email with attachment to the specified recipient.
@@ -21,7 +25,7 @@ def send_email(email_to: str, attachment_path: str) -> None:
         None
 
     Raises:
-        Exception: If email sending fails
+        EmailError: If the email could not be sent
     """
     load_dotenv()
 
@@ -29,7 +33,12 @@ def send_email(email_to: str, attachment_path: str) -> None:
     email_from = os.getenv('EMAIL_FROM')
     email_password = os.getenv('EMAIL_PASSWORD')
     smtp_host = os.getenv('SMTP_HOST')
-    smtp_port = int(os.getenv('SMTP_PORT'))
+    try:
+        smtp_port = int(os.getenv('SMTP_PORT'))
+    except (TypeError, ValueError):
+        raise EmailError("SMTP_PORT is not configured")
+    if not (email_from and smtp_host):
+        raise EmailError("EMAIL_FROM and SMTP_HOST must be configured")
 
     # Create message
     msg = MIMEMultipart(policy=policy.SMTP)
@@ -61,4 +70,4 @@ def send_email(email_to: str, attachment_path: str) -> None:
         server.send_message(msg)
         server.quit()
     except Exception as e:
-        raise Exception(f"Failed to send email: {str(e)}")
+        raise EmailError(f"Failed to send email: {e}") from e
