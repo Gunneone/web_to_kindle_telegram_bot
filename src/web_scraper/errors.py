@@ -11,6 +11,10 @@ class FetchError(ScraperError):
     """The page could not be downloaded (network error, timeout, HTTP error)."""
 
 
+class UnsafeURLError(FetchError):
+    """The URL was refused before fetching: not http(s), or it points at a private or local address."""
+
+
 class BlockedError(ScraperError):
     """The site refused automated access (e.g. Cloudflare bot protection)."""
 
