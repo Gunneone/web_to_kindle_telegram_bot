@@ -12,6 +12,7 @@ downloads/
 eggs/
 .eggs/
 lib/
+!frontend/src/client/lib/
 lib64/
 parts/
 sdist/
@@ -71,7 +72,13 @@ Thumbs.db
 *.html
 *.epub
 *.db
+*.db-wal
+*.db-shm
 users.db
+
+# Web client
+frontend/node_modules/
+frontend/dist/
 
 # Test files
 # (Test files should be committed to version control)

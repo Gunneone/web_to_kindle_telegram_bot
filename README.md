@@ -153,6 +153,64 @@ the language, to send a test book or to delete your data.
 
 ---
 
+## Web App (Eselsohr)
+
+`eselsohr.gunne.one` is the web front end: paste a link, then send the book to your Kindle or download the
+EPUB. It shares the database and the delivery pipeline with the bot, so a person who signs in with Telegram
+gets the same Kindle address, settings and history on both. It speaks English and German and follows the
+[gunne design system](https://gunne.one/ds/v1/gunne.css) (see `frontend/DESIGN.md`).
+
+- **Sign in** with Telegram, Google or an email address (a 6-digit code or a link, no passwords). Connecting
+  Telegram to a web-only account merges the two.
+- **Backend:** `src/web/` is a FastAPI app over `src/core/`; `python src/web_server.py` serves the API and the
+  built client. Books are made in the background and the client polls their progress.
+- **Client:** `frontend/` is React, Vite and Tailwind v4. Colors, fonts and components come from the shared
+  design system, which the page links to from `G1_DS_URL`.
+
+### Run it locally
+
+```bash
+# 1. The API. WEB_MAIL=log prints sign-in codes in the terminal instead of mailing them.
+WEB_MAIL=log python src/web_server.py          # http://127.0.0.1:8000
+
+# 2. The client with hot reload; it proxies /api to the API.
+cd frontend && npm install && npm run dev      # http://localhost:5173
+```
+
+Open http://localhost:5173 (not port 8000) and sign in with your email: the code appears in the API's output.
+`PUBLIC_URL` must match the address in your browser; its default is `http://localhost:5173`. Set `PORT` and
+`API_URL` for Vite if those ports are taken, and `G1_DS_URL=http://localhost:5001/ds/v1` to use a local copy of
+the design system from the gunne.one repository. Never mail real Kindle addresses from a development setup:
+point `SMTP_HOST` somewhere harmless.
+
+Checks: `python -m unittest discover tests`, and in `frontend/`: `npm run typecheck`, `npm test`, `npm run build`.
+
+### Configuration
+
+All in `.env` (see `.env.example`): `PUBLIC_URL`, `SESSION_SECRET` (required with https), and optionally the
+Google and Telegram sign-in credentials. Methods without credentials are hidden; email always works.
+
+- **Google:** in the Google Cloud Console create an OAuth client of type *Web application* and add
+  `<PUBLIC_URL>/api/auth/google/callback` as redirect URI.
+- **Telegram:** in [@BotFather](https://t.me/BotFather) open your bot, then *Login Widget*, and register
+  `<PUBLIC_URL>` and `<PUBLIC_URL>/api/auth/telegram/callback` as allowed URLs. Copy the Client ID and Secret
+  into `TELEGRAM_LOGIN_CLIENT_ID` and `TELEGRAM_LOGIN_CLIENT_SECRET`. Telegram's login may refuse `localhost`,
+  so try it on the deployed domain.
+
+### Deploy
+
+`docker compose up -d` also starts the `web` service (built together with the client). It listens on
+`127.0.0.1:8090`; put your reverse proxy in front and point `eselsohr.gunne.one` at it. Things to know:
+
+- The web app and the bot must run from the same directory (`/app` in the containers): the database and the
+  EPUB files are found through paths relative to it. The compose file mounts the project into both.
+- Run exactly one web process. Running books, sign-in codes and rate limits are kept in memory.
+- The built client is baked into the image at `/srv/eselsohr-dist`; rebuild the image to ship client changes.
+- To register the app in the design system, add its mark, color and project entry in the gunne.one repository
+  (`static/ds/v1/`); until then `data-g1-app="eselsohr"` falls back to the shared blue.
+
+---
+
 ## How it Works
 
 1. **Scraping Content:**
@@ -165,7 +223,7 @@ the language, to send a test book or to delete your data.
    - The `email_sender.py` sends the generated EPUB to the user's Kindle email via an SMTP server.
 
 4. **Delivery Service:**
-   - `src/core/` is shared by every front end: the user and history database (`db.py`), Kindle address checks (`kindle.py`) and the pipeline that fetches, builds, mails and records each book (`pipeline.py`). It doesn't depend on Telegram, so another front end, such as a web app, can reuse it as-is.
+   - `src/core/` is shared by every front end: the user and history database (`db.py`), Kindle address checks (`kindle.py`) and the pipeline that fetches, builds, mails and records each book (`pipeline.py`). `accounts.py` maps sign-ins (Telegram, Google, email) to accounts. It doesn't depend on Telegram or the web app, so each front end reuses it as-is: `src/bot/` is the Telegram front end, `src/web/` and `frontend/` the web one.
 
 5. **Telegram Interface:**
    - `src/bot/` is the Telegram front end on top of `core`. Users interact with the bot using straightforward commands to configure their Kindle email, toggle settings, and process articles from any website.

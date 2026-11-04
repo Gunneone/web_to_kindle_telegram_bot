@@ -339,7 +339,8 @@ class StorageTest(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        with sqlite3.connect(_DB_PATH) as connection:
+        # Test files share one engine, created by whichever imported core.db first
+        with sqlite3.connect(db.engine.url.database) as connection:
             connection.executescript("""
                 CREATE TABLE IF NOT EXISTS users (user_id INTEGER PRIMARY KEY, kindle_email VARCHAR,
                     username VARCHAR, first_name VARCHAR, last_name VARCHAR,

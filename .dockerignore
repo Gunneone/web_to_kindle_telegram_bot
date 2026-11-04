@@ -8,3 +8,5 @@ __pycache__
 .jpg
 .jpeg
 .epub
+frontend/node_modules
+frontend/dist

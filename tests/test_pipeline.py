@@ -115,6 +115,26 @@ class PipelineTest(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(outcome.book.is_preview)
         self.assertEqual(db.get_article(outcome.article_id).status, db.PREVIEW)
 
+    async def test_build_only_then_send(self):
+        self.article.Is_Preview = True
+        frontend = FakeFrontend()
+        built = await pipeline.run(self.user, 'https://e.com/post', frontend, targets=set())
+        self.assertEqual((built.delivered, built.failure), (set(), None))
+        self.assertFalse(built.ok)
+        self.assertEqual(frontend.stages, [Stage.RECEIVED, Stage.FETCHING, Stage.BUILDING])
+        self.assertEqual(self.mailed, [])
+        article = db.get_article(built.article_id)
+        self.assertEqual((article.status, article.paywalled, article.error), (db.READY, 1, None))
+        self.assertIsNone(db.recent_delivery(self.user.user_id, 'https://e.com/post'))  # not delivered yet
+
+        sent = await pipeline.run(self.user, 'https://e.com/post', FakeFrontend(), targets={db.KINDLE},
+                                  article_id=built.article_id, force=True)
+        self.assertEqual(sent.delivered, {db.KINDLE})
+        self.assertEqual(sent.book.epub_path, built.book.epub_path)
+        self.assertTrue(sent.book.is_preview)  # the paywall note survives the reuse
+        self.assertEqual(len(self.scraped), 1)
+        self.assertEqual(db.get_article(built.article_id).status, db.PREVIEW)
+
     async def test_duplicate_is_not_sent_again_unless_forced(self):
         first = await pipeline.run(self.user, 'https://e.com/post', FakeFrontend())
         frontend = FakeFrontend()
@@ -209,14 +229,14 @@ class PipelineTest(unittest.IsolatedAsyncioTestCase):
 
 
 class IndependenceTest(unittest.TestCase):
-    def test_core_does_not_import_telegram(self):
-        """A web app must be able to use the core without python-telegram-bot."""
-        code = ("import sys; import core.db, core.kindle, core.pipeline; "
-                "sys.exit(any(m == 'telegram' or m.startswith('telegram.') for m in sys.modules))")
+    def test_core_does_not_import_a_front_end(self):
+        """Any front end must be able to use the core without the others' frameworks."""
+        code = ("import sys; import core.db, core.accounts, core.kindle, core.pipeline; "
+                "banned = ('telegram', 'fastapi', 'starlette', 'uvicorn', 'authlib', 'web', 'bot'); "
+                "sys.exit(any(m.split('.')[0] in banned for m in sys.modules))")
         env = {**os.environ, 'PYTHONPATH': str(SRC)}
         result = subprocess.run([sys.executable, '-c', code], env=env, cwd=_DB_DIR, capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)
-
 
 if __name__ == '__main__':
     unittest.main()

@@ -9,6 +9,25 @@ services:
       - .:/app  # Bind mount for application code
       - .env:/app/.env:ro  # Mount .env file as read-only
 
+  web:
+    build: .
+    container_name: eselsohr-web
+    restart: always
+    command: ["python", "src/web_server.py"]
+    environment:
+      - TZ=UTC
+      - WEB_HOST=0.0.0.0
+      # Published on the loopback only, so the reverse proxy in front is the one client it sees
+      - FORWARDED_ALLOW_IPS=*
+    ports:
+      - "127.0.0.1:8090:8000"
+    volumes:
+      # Same directory as the bot: both share users.db and output/ (their paths are relative to /app)
+      - .:/app
+      - .env:/app/.env:ro
+    depends_on:
+      - bot
+
   disk-monitor:
     build: .
     container_name: web-to-kindle-disk-monitor

@@ -6,7 +6,7 @@ so existing databases keep working; rows created before a column existed hold NU
 import os
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import Column, DateTime, Integer, String, create_engine, inspect, or_, text
+from sqlalchemy import Column, DateTime, Integer, String, UniqueConstraint, create_engine, event, inspect, or_, text
 from sqlalchemy.orm import declarative_base, sessionmaker
 
 def utcnow() -> datetime:
@@ -16,6 +16,19 @@ def utcnow() -> datetime:
 
 Base = declarative_base()
 engine = create_engine(os.getenv('DATABASE_URL', 'sqlite:///users.db'))
+
+
+if engine.dialect.name == 'sqlite':
+    @event.listens_for(engine, 'connect')
+    def _sqlite_pragmas(dbapi_connection, _record):
+        # The bot and the web app are separate processes sharing one file: let readers and a
+        # writer overlap, and wait for a busy lock instead of failing at once
+        cursor = dbapi_connection.cursor()
+        cursor.execute('PRAGMA journal_mode=WAL')
+        cursor.execute('PRAGMA busy_timeout=5000')
+        cursor.close()
+
+
 Session = sessionmaker(bind=engine, expire_on_commit=False)
 
 # Where books go. TELEGRAM is the EPUB file handed over by the front end itself: a file in the
@@ -30,6 +43,7 @@ PROCESSING = 'processing'
 SENT = 'sent'
 PREVIEW = 'preview'  # sent, but the post is paywalled and only the free part was included
 FAILED = 'failed'
+READY = 'ready'  # built for a look first (the web preview), not delivered yet
 DELIVERED = (SENT, PREVIEW)  # rows from before the status column (NULL) were successful sends too
 
 
@@ -43,10 +57,13 @@ class Article(Base):
     title = Column(String)
     status = Column(String)
     error = Column(String)
+    paywalled = Column(Integer)  # 1: only the free part of a paywalled post is in the EPUB; NULL: unknown (old rows)
 
 
 class User(Base):
     __tablename__ = 'users'
+    # Telegram users keep their Telegram id (always positive). Accounts created on the web through
+    # Google or an email address get negative ids, so the two can never collide (see core.accounts)
     user_id = Column(Integer, primary_key=True)
     kindle_email = Column(String)
     username = Column(String)
@@ -76,6 +93,18 @@ class User(Base):
     def chose_chat_only(self) -> bool:
         """The user asked for EPUB files in the chat, so don't nudge them towards Kindle setup."""
         return self.delivery_mode == TELEGRAM
+
+
+class Identity(Base):
+    """A way to sign in (Telegram, Google, email) and the account it belongs to."""
+    __tablename__ = 'identities'
+    __table_args__ = (UniqueConstraint('provider', 'subject'),)
+    id = Column(Integer, primary_key=True)
+    provider = Column(String, nullable=False)  # 'telegram' | 'google' | 'email'
+    subject = Column(String, nullable=False)  # the provider's stable id; the lowercased address for email
+    user_id = Column(Integer, nullable=False, index=True)
+    email = Column(String)  # a verified address, when the provider gave one
+    created_at = Column(DateTime, default=utcnow)
 
 
 def init_db():
@@ -137,6 +166,7 @@ def delete_user_data(user_id: int) -> None:
         paths = {a.epub_path for a in articles if a.epub_path}
         for article in articles:
             session.delete(article)
+        session.query(Identity).filter_by(user_id=user_id).delete()
         user = session.get(User, user_id)
         if user:
             session.delete(user)

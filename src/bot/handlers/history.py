@@ -15,7 +15,7 @@ from .. import keyboards
 from ..texts import format_date, t
 from . import user_and_lang
 
-STATUS_ICONS = {db.SENT: '✅', db.PREVIEW: '🔒', db.FAILED: '❌', db.PROCESSING: '⏳', None: '✅'}
+STATUS_ICONS = {db.SENT: '✅', db.PREVIEW: '🔒', db.FAILED: '❌', db.READY: '📖', db.PROCESSING: '⏳', None: '✅'}
 MAX_TITLE = 70
 
 
