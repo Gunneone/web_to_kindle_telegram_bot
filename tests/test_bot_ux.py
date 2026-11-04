@@ -424,5 +424,31 @@ class StorageTest(unittest.TestCase):
         self.assertEqual(db.history(other.user_id)[1], 1)
 
 
+class ErrorHandlerTest(unittest.IsolatedAsyncioTestCase):
+    """Network blips while polling are logged only; everything else still reaches the admin."""
+
+    async def run_handler(self, error):
+        from unittest import mock
+        from bot import app
+        context = mock.Mock(error=error)
+        with mock.patch.object(app.delivery, 'notify_admin', mock.AsyncMock()) as notify, \
+                self.assertLogs(app.logger, 'WARNING'):
+            await app.on_error(None, context)
+        return notify
+
+    async def test_transient_errors_are_not_reported(self):
+        from telegram.error import NetworkError, TimedOut
+        for error in (NetworkError('httpx.ConnectError: '), TimedOut()):
+            with self.subTest(error=type(error).__name__):
+                (await self.run_handler(error)).assert_not_awaited()
+
+    async def test_real_errors_are_reported(self):
+        from telegram.error import BadRequest, Conflict
+        for error in (BadRequest("Can't parse entities"), Conflict('terminated by other getUpdates'),
+                      ValueError('boom')):
+            with self.subTest(error=type(error).__name__):
+                (await self.run_handler(error)).assert_awaited_once()
+
+
 if __name__ == '__main__':
     unittest.main()
