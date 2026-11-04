@@ -8,6 +8,7 @@ from html import escape
 
 from telegram import LinkPreviewOptions, Update
 from telegram.constants import ParseMode
+from telegram.error import BadRequest, NetworkError
 from telegram.ext import (Application, CallbackQueryHandler, CommandHandler, ContextTypes, Defaults,
                           MessageHandler, filters)
 
@@ -28,7 +29,16 @@ PRIVATE = filters.UpdateType.MESSAGE & filters.ChatType.PRIVATE
 ALLOWED_UPDATES = [Update.MESSAGE, Update.CALLBACK_QUERY, Update.GUEST_MESSAGE]
 
 
+def is_transient(error: BaseException | None) -> bool:
+    """Connection drops and timeouts talking to Telegram; the library retries these on its own.
+    BadRequest subclasses NetworkError too, but it means our request was wrong, so it isn't one."""
+    return isinstance(error, NetworkError) and not isinstance(error, BadRequest)
+
+
 async def on_error(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if is_transient(context.error):
+        logger.warning("Transient network error: %s", context.error)
+        return
     logger.error("Unhandled error", exc_info=context.error)
     trace = ''.join(traceback.format_exception(context.error))[-3000:]
     await delivery.notify_admin(context.bot, f"💥 <b>Unhandled error</b>\n"
