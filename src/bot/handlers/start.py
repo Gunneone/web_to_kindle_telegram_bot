@@ -10,7 +10,7 @@ from core import db
 from .. import keyboards
 from ..config import SENDER_EMAIL
 from ..links import MAX_LINKS
-from ..texts import t
+from ..texts import for_device, t
 from . import onboarding, settings, user_and_lang
 
 TARGET_TEXTS = {frozenset({db.KINDLE}): 'target_kindle', frozenset({db.TELEGRAM}): 'target_telegram',
@@ -32,7 +32,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     user, lang = user_and_lang(update)
     if user.kindle_email or user.chose_chat_only:
-        target = t(lang, TARGET_TEXTS[frozenset(user.targets)])
+        target = t(lang, for_device(TARGET_TEXTS[frozenset(user.targets)], user.kindle_email))
         await update.message.reply_text(t(lang, 'start_ready', target=target),
                                         reply_markup=keyboards.start_ready(lang))
     else:

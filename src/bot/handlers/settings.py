@@ -10,6 +10,7 @@ from telegram.error import BadRequest
 from telegram.ext import ContextTypes
 
 from core import db
+from core.kindle import AMAZON_STORES
 
 from .. import keyboards, profile
 from ..texts import LANGUAGE_NAMES, LANGUAGES, Raw, t
@@ -18,18 +19,18 @@ from . import onboarding, user_and_lang
 logger = logging.getLogger(__name__)
 
 
-def render(user: db.User, lang: str):
+def render(user: db.User, lang: str, store: str | None = None):
     email = Raw(f"<code>{escape(user.kindle_email)}</code>") if user.kindle_email else Raw(t(lang, 'not_set'))
     targets = user.targets
     mode = db.BOTH if len(targets) == 2 else next(iter(targets))
     text = t(lang, 'settings', email=email, delivery=t(lang, f'delivery_{mode}'),
              links=t(lang, 'on' if user.image_links else 'off'), language=LANGUAGE_NAMES[lang])
-    return text, keyboards.settings(lang, user)
+    return text, keyboards.settings(lang, user, store)
 
 
 async def show(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user, lang = user_and_lang(update)
-    text, markup = render(user, lang)
+    text, markup = render(user, lang, onboarding.user_store(update, user))
     await context.bot.send_message(update.effective_chat.id, text, reply_markup=markup)
 
 
@@ -77,6 +78,19 @@ async def on_settings_button(update: Update, context: ContextTypes.DEFAULT_TYPE)
             await profile.set_chat_language(context.bot, update.effective_chat.id, lang)
             toast = t(lang, 'toast_saved')
 
+    elif data == keyboards.SET_STORE:
+        await query.answer()
+        await query.edit_message_reply_markup(
+            keyboards.store_picker(lang, onboarding.user_store(update, user), keyboards.SET_STORE,
+                                   keyboards.SHOW_SETTINGS))
+        return
+
+    elif data.startswith(keyboards.SET_STORE + ':'):
+        store = data.removeprefix(keyboards.SET_STORE + ':')
+        if store in AMAZON_STORES:
+            user = db.update_user(user.user_id, amazon_store=store)
+            toast = t(lang, 'toast_saved')
+
     elif data == keyboards.SET_TEST:
         await query.answer()
         if not user.kindle_email:
@@ -100,7 +114,7 @@ async def on_settings_button(update: Update, context: ContextTypes.DEFAULT_TYPE)
         return
 
     await query.answer(toast)
-    text, markup = render(user, lang)
+    text, markup = render(user, lang, onboarding.user_store(update, user))
     try:
         await query.edit_message_text(text, reply_markup=markup)
     except BadRequest as e:

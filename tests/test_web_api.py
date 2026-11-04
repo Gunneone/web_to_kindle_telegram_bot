@@ -261,6 +261,32 @@ class AccountTest(ApiCase):
         self.assertEqual((r.status_code, r.json()['error']['code']), (400, 'INVALID_KINDLE_EMAIL'))
         r = c.patch('/api/me', json={'kindle_email': ' Ann_X1@Kindle.com '})
         self.assertEqual(r.json()['user']['kindle_email'], 'ann_x1@kindle.com')
+        self.assertEqual(r.json()['user']['device'], 'kindle')
+
+    def test_amazon_store_follows_the_time_zone_then_the_choice(self):
+        c = self.client()
+        self.sign_in(c)
+        headers = {'Accept-Language': 'en-US,en;q=0.9', 'X-Time-Zone': 'Europe/Berlin'}
+        user = c.get('/api/session', headers=headers).json()['user']
+        self.assertEqual((user['amazon_store'], user['amazon_store_chosen']), ('amazon.de', False))
+        self.assertTrue(user['amazon_settings_url'].startswith('https://www.amazon.de/'))
+        self.assertEqual(user['amazon_devices_url'], 'https://www.amazon.de/hz/mycd/digital-console/alldevices')
+        self.assertEqual(c.get('/api/session', headers={'Accept-Language': 'en-US'}).json()['user']['amazon_store'],
+                         'amazon.com')
+        user = c.patch('/api/me', json={'amazon_store': 'amazon.co.uk'}, headers=headers).json()['user']
+        self.assertEqual((user['amazon_store'], user['amazon_store_chosen']), ('amazon.co.uk', True))
+        r = c.patch('/api/me', json={'amazon_store': 'evil.example'})
+        self.assertEqual(r.json()['error']['code'], 'INVALID_AMAZON_STORE')
+        user = c.patch('/api/me', json={'amazon_store': ''}, headers=headers).json()['user']
+        self.assertEqual((user['amazon_store'], user['amazon_store_chosen']), ('amazon.de', False))
+
+    def test_pocketbook_address(self):
+        c = self.client()
+        self.sign_in(c)
+        user = c.patch('/api/me', json={'kindle_email': 'Ann@pbsync.com'}).json()['user']
+        self.assertEqual((user['kindle_email'], user['device']), ('ann@pbsync.com', 'pocketbook'))
+        self.assertEqual(c.post('/api/me/test-book').status_code, 204)
+        self.assertEqual(self.test_books, [('Your PocketBook setup works!', 'ann@pbsync.com')])
 
     def test_changing_the_address_resets_the_check(self):
         c = self.client()

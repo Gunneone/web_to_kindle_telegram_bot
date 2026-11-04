@@ -6,6 +6,8 @@ import { en } from './en';
 
 export type Lang = 'en' | 'de';
 export const LANGS: readonly Lang[] = ['en', 'de'];
+/** Each language in its own words, so people find theirs whatever language the page is in. */
+export const LANGUAGE_NAMES: Record<Lang, string> = { en: 'English', de: 'Deutsch' };
 
 type DeepStrings<T> = { [K in keyof T]: T[K] extends string ? string : DeepStrings<T[K]> };
 /** The shape every language must have: the keys of `en.ts`, with any text as value. */

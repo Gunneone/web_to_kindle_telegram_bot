@@ -15,6 +15,12 @@ TEXTS = {
             "<p>This test book was sent by Eselsohr. From now on, every article you send to your Kindle "
             "from the site will show up here.</p>"
             "<p>Tip: paste a link on the site, or send it to the Telegram bot.</p>"),
+        'test_book_title_pocketbook': "Your PocketBook setup works!",
+        'test_book_body_pocketbook': (
+            "<h1>It works! 🎉</h1>"
+            "<p>This test book was sent by Eselsohr. From now on, every article you send to your PocketBook "
+            "from the site will show up here.</p>"
+            "<p>Tip: paste a link on the site, or send it to the Telegram bot.</p>"),
         'code_subject': "{code} is your Eselsohr sign-in code",
         'code_text': ("Your sign-in code: {code}\n\n"
                       "Or open this link: {link}\n\n"
@@ -29,6 +35,12 @@ TEXTS = {
             "<h1>Es funktioniert! 🎉</h1>"
             "<p>Dieses Testbuch hat Eselsohr geschickt. Ab jetzt landet hier jeder Artikel, den du auf der "
             "Seite an dein Kindle schickst.</p>"
+            "<p>Tipp: Füge einen Link auf der Seite ein oder schick ihn an den Telegram-Bot.</p>"),
+        'test_book_title_pocketbook': "Deine PocketBook-Einrichtung funktioniert!",
+        'test_book_body_pocketbook': (
+            "<h1>Es funktioniert! 🎉</h1>"
+            "<p>Dieses Testbuch hat Eselsohr geschickt. Ab jetzt landet hier jeder Artikel, den du auf der "
+            "Seite an dein PocketBook schickst.</p>"
             "<p>Tipp: Füge einen Link auf der Seite ein oder schick ihn an den Telegram-Bot.</p>"),
         'code_subject': "{code} ist dein Eselsohr-Anmeldecode",
         'code_text': ("Dein Anmeldecode: {code}\n\n"

@@ -38,6 +38,55 @@
   stroke-width: 1.75;
 }
 
+/* A small menu under a header button (the language picker). Flat like every surface: an edge, no shadow. */
+.esel-menu {
+  --g1-c: var(--g1-cut-sm);
+  --g1-edge: var(--g1-border-strong);
+  position: absolute;
+  top: calc(100% + var(--g1-space-1));
+  right: 0;
+  z-index: 1;
+  min-width: 11rem;
+  padding: var(--g1-space-1);
+  animation: esel-menu-in var(--g1-dur-fast) var(--g1-ease);
+}
+.esel-menu__item {
+  display: flex;
+  width: 100%;
+  min-height: 40px;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--g1-space-4);
+  padding: 0 var(--g1-space-3);
+  border: 0;
+  background: none;
+  color: var(--g1-text-muted);
+  font-size: var(--g1-text-sm);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background-color var(--g1-dur-fast) var(--g1-ease),
+    color var(--g1-dur-fast) var(--g1-ease);
+}
+.esel-menu__item:hover,
+.esel-menu__item:focus-visible {
+  background: var(--g1-surface-2);
+  color: var(--g1-text);
+}
+.esel-menu__item[aria-checked='true'] {
+  color: var(--g1-text);
+  font-weight: 500;
+}
+.esel-menu__check {
+  color: var(--g1-primary);
+}
+@keyframes esel-menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
 /* The page fills the window so the footer sits at the bottom. */
 #root {
   min-height: 100vh;

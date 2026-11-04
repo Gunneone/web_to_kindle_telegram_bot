@@ -8,11 +8,19 @@ export interface Me {
   name: string | null;
   email: string | null;
   kindle_email: string | null;
+  /** Which reader kindle_email belongs to: a Kindle, or a PocketBook (@pbsync.com) */
+  device: 'kindle' | 'pocketbook' | null;
   setup_verified: boolean;
   image_links: boolean;
   language: 'en' | 'de' | null;
   sender_email: string | null;
+  /** The Amazon store links go to: the one picked, else a guess from time zone and languages */
+  amazon_store: string;
+  amazon_store_chosen: boolean;
+  amazon_stores: string[];
   amazon_settings_url: string;
+  /** Amazon's device list, where each Kindle shows its address (setup step 1) */
+  amazon_devices_url: string;
   providers: Provider[];
 }
 
@@ -61,12 +69,25 @@ export function errorCode(error: unknown): string | null {
   return error instanceof ApiError ? error.code : 'UNKNOWN';
 }
 
+/** The browser's time zone, e.g. 'Europe/Berlin': the server's best hint for which Amazon store to link. */
+function timeZone(): string | null {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || null;
+  } catch {
+    return null;
+  }
+}
+
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   let response: Response;
+  const headers: Record<string, string> = {};
+  if (body !== undefined) headers['Content-Type'] = 'application/json';
+  const zone = timeZone();
+  if (zone) headers['X-Time-Zone'] = zone;
   try {
     response = await fetch(path, {
       method,
-      headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
+      headers,
       body: body === undefined ? undefined : JSON.stringify(body),
     });
   } catch {
@@ -82,7 +103,7 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 }
 
 export const getSession = () => request<SessionInfo>('GET', '/api/session');
-export const updateMe = (body: { kindle_email?: string; image_links?: boolean; language?: string }) =>
+export const updateMe = (body: { kindle_email?: string; image_links?: boolean; language?: string; amazon_store?: string }) =>
   request<{ user: Me }>('PATCH', '/api/me', body);
 export const deleteMe = () => request<void>('DELETE', '/api/me');
 export const sendTestBook = () => request<void>('POST', '/api/me/test-book');

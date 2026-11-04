@@ -26,16 +26,19 @@ os.environ['DATABASE_URL'] = f'sqlite:///{_DB_PATH}'
 from telegram import Message, MessageEntity  # noqa: E402
 
 from core import db  # noqa: E402
-from core.kindle import is_kindle_email, looks_like_email, normalize_email  # noqa: E402
+from core.kindle import (AMAZON_STORES, amazon_store, device_of, is_device_email, is_kindle_email, is_pocketbook_email,  # noqa: E402
+                         looks_like_email, normalize_email)
 from core.pipeline import word_count  # noqa: E402
 from bot import keyboards  # noqa: E402
 from bot.config import amazon_settings_url  # noqa: E402
+from core.kindle import amazon_devices_url  # noqa: E402
 from bot.delivery import Book, card_text, upsert_user  # noqa: E402
 from bot.handlers import history as history_screen  # noqa: E402
 from bot.handlers import settings as settings_screen  # noqa: E402
 from bot.links import MAX_LINKS, extract_urls  # noqa: E402
 from bot.profile import COMMANDS  # noqa: E402
-from bot.texts import LANGUAGES, TEXTS, Raw, format_date, format_size, resolve_lang, t  # noqa: E402
+from bot.texts import (LANGUAGES, TEXTS, Raw, for_device, format_date, format_size, resolve_lang,  # noqa: E402
+                       t)
 
 BOT_ID = 4242
 
@@ -142,6 +145,58 @@ class KindleEmailTest(unittest.TestCase):
 
     def test_normalize(self):
         self.assertEqual(normalize_email(' Name@Kindle.com\n'), 'name@kindle.com')
+
+    def test_pocketbook_addresses_are_accepted_as_a_second_reader(self):
+        for email in ('ann_x1@pbsync.com', ' Ann@PBSync.com ', 'mailto:ann@pbsync.com'):
+            with self.subTest(email=email):
+                self.assertTrue(is_pocketbook_email(email))
+                self.assertTrue(is_device_email(email))
+                self.assertFalse(is_kindle_email(email))
+                self.assertEqual(device_of(email), 'pocketbook')
+        for email in ('ann@pbsync.com.evil.org', 'ann@mail.pbsync.com', '@pbsync.com', 'ann@gmail.com'):
+            with self.subTest(email=email):
+                self.assertFalse(is_device_email(email))
+        self.assertTrue(is_device_email('name@kindle.com'))
+        self.assertEqual(device_of('name@kindle.com'), 'kindle')
+        self.assertEqual(device_of(None), 'kindle')  # Kindle is the default wording
+
+    def test_amazon_store_guess(self):
+        # Germany with an English browser or Telegram: the time zone or the region decides, not the language
+        self.assertEqual(amazon_store('en', time_zone='Europe/Berlin'), 'amazon.de')
+        self.assertEqual(amazon_store('en-US,en;q=0.9', time_zone='Europe/Vienna'), 'amazon.de')
+        self.assertEqual(amazon_store('en-DE'), 'amazon.de')
+        self.assertEqual(amazon_store('en', 'de'), 'amazon.de')  # Telegram in English, bot set to German
+        self.assertEqual(amazon_store('en-GB'), 'amazon.co.uk')
+        self.assertEqual(amazon_store('de-CH'), 'amazon.de')
+        self.assertEqual(amazon_store('en', time_zone='Australia/Sydney'), 'amazon.com.au')
+        self.assertEqual(amazon_store('en-US,en;q=0.9,de;q=0.8'), 'amazon.com')  # the US region wins
+        self.assertEqual(amazon_store('en'), 'amazon.com')
+        self.assertEqual(amazon_store(None), 'amazon.com')
+        # A store the user picked beats every guess; anything else is ignored
+        self.assertEqual(amazon_store('de', chosen='amazon.co.uk', time_zone='Europe/Berlin'), 'amazon.co.uk')
+        self.assertEqual(amazon_store('de', chosen='evil.example'), 'amazon.de')
+
+    def test_step1_links_to_amazon_devices(self):
+        url = amazon_devices_url(chosen='amazon.de')
+        self.assertEqual(url, 'https://www.amazon.de/hz/mycd/digital-console/alldevices')
+        self.assertEqual(amazon_settings_url(chosen='amazon.de'),
+                         'https://www.amazon.de/hz/mycd/preferences/myx#/home/settings/payment')
+        for lang in LANGUAGES:
+            for key in ('setup_step1', 'email_not_kindle'):
+                with self.subTest(lang=lang, key=key):
+                    self.assertIn(f'<a href="{url}">', t(lang, key, email='a@gmail.com', url=url))
+
+    def test_pocketbook_texts_only_where_they_differ(self):
+        self.assertEqual(for_device('setup_step2', 'a@pbsync.com'), 'setup_step2_pocketbook')
+        self.assertEqual(for_device('setup_step2', 'a@kindle.com'), 'setup_step2')
+        self.assertEqual(for_device('setup_step2', None), 'setup_step2')
+        self.assertEqual(for_device('help', 'a@pbsync.com'), 'help')  # no PocketBook version: Kindle text
+        for lang in LANGUAGES:
+            for key in TEXTS['en']:
+                if key.endswith('_pocketbook'):
+                    with self.subTest(lang=lang, key=key):
+                        self.assertIn(key.removesuffix('_pocketbook'), TEXTS['en'])  # a variant of a real text
+                        self.assertNotIn('Kindle', TEXTS[lang][key])
 
 
 class TagChecker(HTMLParser):
@@ -272,6 +327,38 @@ class KeyboardsTest(unittest.TestCase):
                         self.assertLessEqual(len(button.copy_text.text), 256)
                     self.assertTrue(button.callback_data or button.url or button.copy_text)
 
+    def test_amazon_buttons_name_the_store_and_offer_others(self):
+        markup = keyboards.setup_sender('en', 'a@b.de', amazon_settings_url(chosen='amazon.de'))
+        buttons = all_buttons(markup)
+        self.assertIn(t('en', 'btn_open_amazon', store='amazon.de'), [b.text for b in buttons])
+        self.assertIn(keyboards.setup_store(keyboards.STORE_STEP2), [b.callback_data for b in buttons])
+        troubleshoot = all_buttons(keyboards.troubleshoot('en', 'a@b.de', amazon_settings_url()))
+        self.assertIn(keyboards.setup_store(keyboards.STORE_TROUBLESHOOT), [b.callback_data for b in troubleshoot])
+
+    def test_store_picker(self):
+        prefix = keyboards.setup_store(keyboards.STORE_TROUBLESHOOT)
+        buttons = all_buttons(keyboards.store_picker('en', 'amazon.de', prefix, keyboards.SHOW_SETTINGS))
+        self.assertEqual([b.callback_data for b in buttons[:-1]], [f'{prefix}:{s}' for s in AMAZON_STORES])
+        self.assertIn('✓ amazon.de', [b.text for b in buttons])
+        self.assertEqual(buttons[-1].callback_data, keyboards.SHOW_SETTINGS)
+        for button in buttons:
+            self.assertLessEqual(len(button.callback_data.encode()), 64)
+        settings = all_buttons(keyboards.settings('en', self.user, 'amazon.de'))
+        self.assertIn(keyboards.SET_STORE, [b.callback_data for b in settings])
+        pocketbook = db.User(user_id=2, kindle_email='a@pbsync.com')
+        self.assertNotIn(keyboards.SET_STORE, [b.callback_data for b in all_buttons(keyboards.settings('en', pocketbook, 'amazon.de'))])
+
+    def test_pocketbook_setup_has_no_amazon_button(self):
+        for markup in (keyboards.setup_sender('en', 'a@b.de', None), keyboards.troubleshoot('en', 'a@b.de', None)):
+            self.assertFalse(any(b.url for b in all_buttons(markup)))
+        step2 = all_buttons(keyboards.setup_sender('en', 'a@b.de', None))
+        self.assertIn(keyboards.SETUP_ADDED, [b.callback_data for b in step2])
+
+    def test_result_card_names_the_pocketbook(self):
+        user = db.User(user_id=1, kindle_email='name@pbsync.com')
+        labels = [b.text for b in all_buttons(keyboards.result_card('en', 1, 'https://e.com', {db.TELEGRAM}, user, False))]
+        self.assertIn(t('en', 'btn_send_to_kindle_pocketbook'), labels)
+
     def test_copy_button_only_with_a_sender(self):
         self.assertTrue(any(b.copy_text for b in all_buttons(keyboards.setup_sender('en', 'a@b.de', 'https://x'))))
         self.assertFalse(any(b.copy_text for b in all_buttons(keyboards.setup_sender('en', '', 'https://x'))))
@@ -316,6 +403,11 @@ class CardTest(unittest.TestCase):
         book = Book(title='T', url='https://e.com', epub_path='/nonexistent.epub')
         self.assertIn(t('de', 'footer_both'), card_text('de', book, {db.KINDLE, db.TELEGRAM}))
         self.assertIn(t('de', 'footer_telegram'), card_text('de', book, {db.TELEGRAM}))
+
+    def test_card_footer_names_the_pocketbook(self):
+        book = Book(title='T', url='https://e.com', epub_path='/nonexistent.epub')
+        self.assertIn(t('en', 'footer_kindle_pocketbook'), card_text('en', book, {db.KINDLE}, 'a@pbsync.com'))
+        self.assertIn(t('en', 'footer_kindle'), card_text('en', book, {db.KINDLE}, 'a@kindle.com'))
 
     def test_long_titles_are_shortened(self):
         book = Book(title='A' * 500, url='https://e.com', epub_path='/nonexistent.epub')
@@ -422,6 +514,32 @@ class StorageTest(unittest.TestCase):
         self.assertFalse(os.path.exists(epub))
         self.assertTrue(os.path.exists(shared))  # still in someone else's history
         self.assertEqual(db.history(other.user_id)[1], 1)
+
+
+class ErrorHandlerTest(unittest.IsolatedAsyncioTestCase):
+    """Network blips while polling are logged only; everything else still reaches the admin."""
+
+    async def run_handler(self, error):
+        from unittest import mock
+        from bot import app
+        context = mock.Mock(error=error)
+        with mock.patch.object(app.delivery, 'notify_admin', mock.AsyncMock()) as notify, \
+                self.assertLogs(app.logger, 'WARNING'):
+            await app.on_error(None, context)
+        return notify
+
+    async def test_transient_errors_are_not_reported(self):
+        from telegram.error import NetworkError, TimedOut
+        for error in (NetworkError('httpx.ConnectError: '), TimedOut()):
+            with self.subTest(error=type(error).__name__):
+                (await self.run_handler(error)).assert_not_awaited()
+
+    async def test_real_errors_are_reported(self):
+        from telegram.error import BadRequest, Conflict
+        for error in (BadRequest("Can't parse entities"), Conflict('terminated by other getUpdates'),
+                      ValueError('boom')):
+            with self.subTest(error=type(error).__name__):
+                (await self.run_handler(error)).assert_awaited_once()
 
 
 if __name__ == '__main__':

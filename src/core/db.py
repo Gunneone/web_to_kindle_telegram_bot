@@ -74,6 +74,7 @@ class User(Base):
     delivery_mode = Column(String)  # NULL: not chosen yet (Kindle once an address is set, chat until then)
     language = Column(String)  # NULL: follow the Telegram app language
     setup_verified = Column(Integer, default=0)  # the test book arrived
+    amazon_store = Column(String)  # e.g. 'amazon.de', picked by the user; NULL: guess it (see core.kindle)
 
     @property
     def image_links(self) -> bool:

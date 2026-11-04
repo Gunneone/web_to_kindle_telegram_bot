@@ -29,18 +29,31 @@ MAX_URL_LENGTH = 2000
 PAGE_SIZE = 20
 
 
+def amazon_store(user: db.User, request: Request) -> str:
+    """The store the user picked, else a guess from the browser's time zone (sent by the client as
+    X-Time-Zone) and languages: an English browser in Berlin should still land on amazon.de."""
+    return kindle.amazon_store(request.headers.get('accept-language'), user.language,
+                               chosen=user.amazon_store, time_zone=request.headers.get('x-time-zone'))
+
+
 def me_payload(user: db.User, request: Request) -> dict:
-    lang = request_language(request, user)
+    store = amazon_store(user, request)
     name = user.first_name or user.username or (accounts.email_of(user.user_id) or '').split('@')[0]
     return {
         'name': name or None,
         'email': accounts.email_of(user.user_id),
         'kindle_email': user.kindle_email,
+        # Which reader kindle_email belongs to ('kindle' or 'pocketbook'), so the client can word the setup
+        'device': kindle.device_of(user.kindle_email) if user.kindle_email else None,
         'setup_verified': bool(user.setup_verified),
         'image_links': user.image_links,
         'language': user.language if user.language in LANGUAGES else None,
         'sender_email': kindle.sender_email() or None,
-        'amazon_settings_url': kindle.amazon_settings_url(lang),
+        'amazon_store': store,
+        'amazon_store_chosen': bool(user.amazon_store),
+        'amazon_stores': list(kindle.AMAZON_STORES),
+        'amazon_settings_url': kindle.amazon_settings_url(chosen=store),
+        'amazon_devices_url': kindle.amazon_devices_url(chosen=store),
         'providers': sorted({i.provider for i in accounts.identities(user.user_id)}),
     }
 
@@ -56,6 +69,7 @@ class MePatch(BaseModel):
     kindle_email: str | None = None
     image_links: bool | None = None
     language: str | None = None
+    amazon_store: str | None = None  # '' goes back to guessing
 
 
 @router.patch('/me')
@@ -63,13 +77,17 @@ async def patch_me(body: MePatch, request: Request, user: db.User = Depends(requ
     fields: dict = {}
     if body.kindle_email is not None:
         address = kindle.normalize_email(body.kindle_email)
-        if address and not kindle.is_kindle_email(address):
+        if address and not kindle.is_device_email(address):
             raise ApiError(400, 'INVALID_KINDLE_EMAIL')
         address = address or None
         if address != user.kindle_email:
             fields.update(kindle_email=address, setup_verified=0)
     if body.image_links is not None:
         fields['preserve_image_links'] = int(body.image_links)
+    if body.amazon_store is not None:
+        if body.amazon_store and body.amazon_store not in kindle.AMAZON_STORES:
+            raise ApiError(400, 'INVALID_AMAZON_STORE')
+        fields['amazon_store'] = body.amazon_store or None
     if body.language is not None:
         if body.language not in LANGUAGES:
             raise ApiError(400, 'INVALID_LANGUAGE')
@@ -93,11 +111,12 @@ async def test_book(request: Request, user: db.User = Depends(require_user), app
     if not app.test_books_per_user.allow(str(user.user_id)):
         raise ApiError(429, 'RATE_LIMITED')
     lang = request_language(request, user)
+    suffix = '_pocketbook' if kindle.device_of(user.kindle_email) == kindle.POCKETBOOK else ''
     article = WebArticle(
         # A unique URL gives every test book its own EPUB identifier, so Kindle never skips it as a duplicate
         url=f'{app.settings.public_url}/#test-{user.user_id}-{int(db.utcnow().timestamp())}',
-        title=t(lang, 'test_book_title'), author='Eselsohr', published_at=date.today().isoformat(),
-        content=t(lang, 'test_book_body'), language=lang)
+        title=t(lang, 'test_book_title' + suffix), author='Eselsohr', published_at=date.today().isoformat(),
+        content=t(lang, 'test_book_body' + suffix), language=lang)
     try:
         await pipeline.email_article(article, user.kindle_email)
     except EmailError as e:
