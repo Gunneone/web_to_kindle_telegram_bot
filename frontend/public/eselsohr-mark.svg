@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" fill="none">
+  <title>Eselsohr</title>
+  <!-- A page with its top-left corner folded over: the dog-ear is the same 45° cut as the g1 chamfer -->
+  <path d="M26 6H50V58H14V18Z" fill="#D9376E"/>
+  <path d="M14 18L26 6V18Z" fill="#F88414"/>
+  <path d="M22 29H42M22 37H42M22 45H33" stroke="#fff" stroke-opacity=".88" stroke-width="3"/>
+</svg>

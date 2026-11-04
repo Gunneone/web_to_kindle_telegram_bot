@@ -1,0 +1,46 @@
+@import 'tailwindcss';
+
+/* Colors and fonts come from gunne.css (linked in index.html), so light and dark follow the shared theme. */
+@theme inline {
+  --color-bg: var(--g1-bg);
+  --color-surface: var(--g1-surface);
+  --color-surface-2: var(--g1-surface-2);
+  --color-field: var(--g1-field);
+  --color-line: var(--g1-border);
+  --color-line-strong: var(--g1-border-strong);
+  --color-fg: var(--g1-text);
+  --color-muted: var(--g1-text-muted);
+  --color-subtle: var(--g1-text-subtle);
+  --color-primary: var(--g1-primary);
+  --color-primary-hover: var(--g1-primary-hover);
+  --color-on-primary: var(--g1-on-primary);
+  --color-link: var(--g1-link);
+  --color-accent: var(--g1-accent);
+  --color-accent-fg: var(--g1-accent-text);
+  --color-accent-soft: var(--g1-accent-soft);
+  --color-app: var(--g1-app);
+  --color-app-fg: var(--g1-app-text);
+  --color-on-app: var(--g1-on-app);
+  --color-app-soft: var(--g1-app-soft);
+  --color-success: var(--g1-success);
+  --color-warning: var(--g1-warning);
+  --color-danger: var(--g1-danger);
+  --font-sans: var(--g1-font-sans);
+  --font-mono: var(--g1-font-mono);
+  --font-hand: var(--g1-font-hand);
+}
+
+/* dark: variant follows the shared theme attribute */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/* Tabler icons at the design system's stroke weight. */
+.tabler-icon {
+  stroke-width: 1.75;
+}
+
+/* The page fills the window so the footer sits at the bottom. */
+#root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}

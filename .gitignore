@@ -71,7 +71,13 @@ Thumbs.db
 *.html
 *.epub
 *.db
+*.db-wal
+*.db-shm
 users.db
+
+# Web client
+frontend/node_modules/
+frontend/dist/
 
 # Test files
 # (Test files should be committed to version control)
