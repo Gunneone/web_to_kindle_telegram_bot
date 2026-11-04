@@ -200,7 +200,9 @@ Google and Telegram sign-in credentials. Methods without credentials are hidden;
 ### Deploy
 
 `docker compose up -d` also starts the `web` service (built together with the client). It listens on
-`127.0.0.1:8090`; put your reverse proxy in front and point `eselsohr.gunne.one` at it. Things to know:
+`127.0.0.1:8090`; put your reverse proxy in front and point `eselsohr.gunne.one` at it.
+[`deploy/nginx/eselsohr.conf`](deploy/nginx/eselsohr.conf) is a ready nginx config, with setup steps at the top.
+Things to know:
 
 - The web app and the bot must run from the same directory (`/app` in the containers): the database and the
   EPUB files are found through paths relative to it. The compose file mounts the project into both.

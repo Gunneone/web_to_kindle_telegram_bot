@@ -6,8 +6,9 @@ from telegram import CopyTextButton, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import KeyboardButtonStyle
 
 from core import db
+from core.kindle import AMAZON_STORES, POCKETBOOK, device_of
 
-from .texts import LANGUAGE_NAMES, LANGUAGES, t
+from .texts import LANGUAGE_NAMES, LANGUAGES, for_device, t
 
 PRIMARY = KeyboardButtonStyle.PRIMARY
 SUCCESS = KeyboardButtonStyle.SUCCESS
@@ -29,6 +30,15 @@ SET_LINKS = 'set:links'
 SET_TEST = 'set:test'
 SET_DELETE = 'set:delete'
 SET_DELETE_YES = 'set:delete_yes'
+SET_STORE = 'set:store'          # pick the Amazon store (then 'set:store:<store>')
+
+# The store picker from setup step 2 / troubleshooting: 'setup:store:<where>[:<store>|:back]'
+STORE_STEP2 = 's'
+STORE_TROUBLESHOOT = 't'
+
+
+def setup_store(where: str, choice: str | None = None) -> str:
+    return f'setup:store:{where}' + (f':{choice}' if choice else '')
 
 
 def set_mode(mode: str) -> str:
@@ -72,10 +82,35 @@ def start_ready(lang):
     return markup([button(t(lang, 'btn_settings'), SHOW_SETTINGS), button(t(lang, 'btn_help'), SHOW_HELP)])
 
 
-def setup_sender(lang, sender: str, amazon_url: str, *, done_button: bool = True):
+def store_of(amazon_url: str) -> str:
+    """'https://www.amazon.de/hz/...' -> 'amazon.de'"""
+    return amazon_url.split('/')[2].removeprefix('www.')
+
+
+def amazon_buttons(lang, amazon_url: str, where: str):
+    """Open the settings at the guessed store, or pick another one (an English Telegram says nothing
+    about which country someone's Amazon account is in)."""
+    return [[button(t(lang, 'btn_open_amazon', store=store_of(amazon_url)), url=amazon_url)],
+            [button(t(lang, 'btn_other_store'), setup_store(where))]]
+
+
+def store_picker(lang, current: str, choice_prefix: str, back: str):
+    """All stores, three per row, the current one ticked; `choice_prefix` + ':' + store picks one."""
+    buttons = [button(f"✓ {store}" if store == current else store, f'{choice_prefix}:{store}')
+               for store in AMAZON_STORES]
+    rows = [buttons[i:i + 3] for i in range(0, len(buttons), 3)]
+    return markup(*rows, [button(t(lang, 'btn_back'), back)])
+
+
+def setup_sender(lang, sender: str, amazon_url: str | None, *, done_button: bool = True):
+    """Step 2. Without `amazon_url` (a PocketBook, which has no sender list to fill in) there is
+    nothing to copy or open: the user only acknowledges that PocketBook will ask them to confirm."""
+    if amazon_url is None:
+        return markup([button(t(lang, 'btn_change_email'), SETUP_START),
+                       button(t(lang, 'btn_got_it'), SETUP_ADDED, style=PRIMARY) if done_button else None])
     return markup(
         [button(t(lang, 'btn_copy_sender'), copy=sender)] if sender else None,
-        [button(t(lang, 'btn_open_amazon'), url=amazon_url)],
+        *amazon_buttons(lang, amazon_url, STORE_STEP2),
         [button(t(lang, 'btn_change_email'), SETUP_START),
          button(t(lang, 'btn_sender_added'), SETUP_ADDED, style=PRIMARY) if done_button else None],
     )
@@ -95,16 +130,17 @@ def test_retry(lang):
     return markup([button(t(lang, 'btn_try_again'), SETUP_TEST, style=PRIMARY)])
 
 
-def troubleshoot(lang, sender: str, amazon_url: str):
+def troubleshoot(lang, sender: str, amazon_url: str | None):
     return markup(
         [button(t(lang, 'btn_try_again'), SETUP_TEST, style=PRIMARY)],
         [button(t(lang, 'btn_copy_sender'), copy=sender)] if sender else None,
-        [button(t(lang, 'btn_open_amazon'), url=amazon_url)],
+        *(amazon_buttons(lang, amazon_url, STORE_TROUBLESHOOT) if amazon_url else []),
         [button(t(lang, 'btn_change_email'), SETUP_START)],
     )
 
 
-def settings(lang, user: db.User):
+def settings(lang, user: db.User, store: str | None = None):
+    """`store`: the Amazon store links go to (a button changes it); none for a PocketBook."""
     mode = user.delivery_mode if user.kindle_email else db.TELEGRAM
     mode = mode or db.KINDLE
     other_lang = next(code for code in LANGUAGES if code != lang)
@@ -121,6 +157,8 @@ def settings(lang, user: db.User):
         [button(t(lang, 'btn_links', state=links), SET_LINKS),
          button(LANGUAGE_NAMES[other_lang], set_lang(other_lang))],
         [button(t(lang, 'btn_send_test'), SET_TEST)] if user.kindle_email else None,
+        [button(t(lang, 'btn_amazon_store', store=store), SET_STORE)]
+        if store and device_of(user.kindle_email) != POCKETBOOK else None,
         [button(t(lang, 'btn_delete_data'), SET_DELETE, style=DANGER)],
     )
 
@@ -140,7 +178,7 @@ def result_card(lang, article_id: int, url: str, delivered_to: set[str], user: d
     if db.TELEGRAM not in delivered_to:
         actions.append(button(t(lang, 'btn_epub_here'), article_action('file', article_id)))
     if user.kindle_email:
-        label = 'btn_resend' if db.KINDLE in delivered_to else 'btn_send_to_kindle'
+        label = 'btn_resend' if db.KINDLE in delivered_to else for_device('btn_send_to_kindle', user.kindle_email)
         actions.append(button(t(lang, label), article_action('kindle', article_id)))
     elif not user.chose_chat_only:
         actions.append(button(t(lang, 'btn_setup_kindle'), SETUP_START, style=PRIMARY))
@@ -158,8 +196,9 @@ def duplicate(lang, article_id: int):
                    button(t(lang, 'btn_epub_here'), article_action('file', article_id))])
 
 
-def send_to_kindle(lang, article_id: int):
-    return markup([button(t(lang, 'btn_send_to_kindle'), article_action('kindle', article_id), style=PRIMARY)])
+def send_to_kindle(lang, article_id: int, address: str | None = None):
+    label = t(lang, for_device('btn_send_to_kindle', address))
+    return markup([button(label, article_action('kindle', article_id), style=PRIMARY)])
 
 
 def history(articles: list[db.Article], offset: int, total: int):

@@ -19,7 +19,7 @@ from web_scraper import Article as WebArticle
 
 from . import keyboards
 from .config import ADMIN_ID, MAX_UPLOAD_BYTES
-from .texts import format_date, format_size, resolve_lang, t
+from .texts import for_device, format_date, format_size, resolve_lang, t
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +50,8 @@ def reply_to(message_id: int | None) -> ReplyParameters | None:
     return ReplyParameters(message_id, allow_sending_without_reply=True) if message_id else None
 
 
-def card_text(lang: str, book: Book, delivered: set[str]) -> str:
+def card_text(lang: str, book: Book, delivered: set[str], address: str | None = None) -> str:
+    """The caption of a delivered book; `address` is the reader it was mailed to (Kindle or PocketBook)."""
     title = book.title if len(book.title) <= MAX_TITLE_LENGTH else book.title[:MAX_TITLE_LENGTH - 1] + '…'
     lines = [f"📚 <b>{escape(title)}</b>"]
     byline = [t(lang, 'card_by', author=book.author)] if book.author else []
@@ -69,7 +70,7 @@ def card_text(lang: str, book: Book, delivered: set[str]) -> str:
     if book.is_preview:
         lines += ['', t(lang, 'card_preview')]
     if db.KINDLE in delivered:
-        lines += ['', t(lang, 'footer_both' if db.TELEGRAM in delivered else 'footer_kindle')]
+        lines += ['', t(lang, for_device('footer_both' if db.TELEGRAM in delivered else 'footer_kindle', address))]
     elif db.TELEGRAM in delivered:
         lines += ['', t(lang, 'footer_telegram')]
     return '\n'.join(lines)
@@ -157,7 +158,7 @@ class Chat(pipeline.Frontend):
         if stage == Stage.RECEIVED:
             await self.progress.react(REACT_RECEIVED)
             return
-        await self.progress.show(STATUS_TEXTS[stage])
+        await self.progress.show(for_device(STATUS_TEXTS[stage], self.user.kindle_email))
         if stage == Stage.BUILDING:
             await self.progress.react(REACT_WORKING)
 
@@ -167,7 +168,7 @@ class Chat(pipeline.Frontend):
         with open(book.epub_path, 'rb') as document:
             await self.bot.send_document(
                 self.chat_id, document, filename=os.path.basename(book.epub_path),
-                caption=card_text(self.lang, book, delivered),
+                caption=card_text(self.lang, book, delivered, self.user.kindle_email),
                 reply_markup=keyboards.result_card(self.lang, article.id, book.url, delivered, self.user,
                                                    book.is_preview),
                 reply_parameters=reply_to(self.reply_to_id))
@@ -215,7 +216,7 @@ async def _show_result(progress: Progress, lang: str, user: db.User, url: str, o
     """The result card, unless the EPUB in the chat already is one."""
     book = outcome.book
     if progress.message is not None or not outcome.delivered:
-        text = card_text(lang, book, outcome.delivered)
+        text = card_text(lang, book, outcome.delivered, user.kindle_email)
         offered = outcome.delivered
         if outcome.file_too_big:
             text += '\n\n' + t(lang, 'file_too_big', size=format_size(lang, outcome.file_too_big))
@@ -244,7 +245,7 @@ async def send_test_book(bot: Bot, user: db.User, lang: str) -> None:
     article = WebArticle(
         # A unique URL gives every test book its own EPUB identifier, so Kindle never skips it as a duplicate
         url=f"https://t.me/{bot.username}#test-{user.user_id}-{int(db.utcnow().timestamp())}",
-        title=t(lang, 'test_book_title'),
+        title=t(lang, for_device('test_book_title', user.kindle_email)),
         author=bot.first_name,
         published_at=date.today().isoformat(),
         content=t(lang, 'test_book_body', bot=bot.username),

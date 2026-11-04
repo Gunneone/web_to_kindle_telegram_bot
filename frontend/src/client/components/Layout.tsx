@@ -2,7 +2,6 @@ import {
   IconBrandGithub,
   IconBrandLinkedin,
   IconBrandTelegram,
-  IconLanguage,
   IconMoon,
   IconSun,
 } from '@tabler/icons-react';
@@ -10,6 +9,7 @@ import { Link, NavLink, Outlet } from 'react-router';
 import { useI18n } from '../i18n';
 import { useMe } from '../lib/session';
 import { Brand } from './Brand';
+import { LanguageMenu } from './LanguageMenu';
 
 const SOCIAL = [
   { label: 'GitHub', href: 'https://github.com/gunneone', icon: IconBrandGithub },
@@ -18,7 +18,7 @@ const SOCIAL = [
 ];
 
 export function Layout() {
-  const { t, lang, setLang } = useI18n();
+  const { t } = useI18n();
   const me = useMe();
   return (
     <>
@@ -43,15 +43,7 @@ export function Layout() {
                 {t('nav.signIn')}
               </Link>
             )}
-            <button
-              type="button"
-              className="g1-btn g1-btn--ghost g1-btn--icon"
-              onClick={() => setLang(lang === 'en' ? 'de' : 'en')}
-              aria-label={t('common.switchLanguage')}
-              title={t('common.switchLanguage')}
-            >
-              <IconLanguage className="g1-icon" aria-hidden />
-            </button>
+            <LanguageMenu />
             <button
               type="button"
               className="g1-btn g1-btn--ghost g1-btn--icon"

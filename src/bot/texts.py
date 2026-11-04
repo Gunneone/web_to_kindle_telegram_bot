@@ -7,6 +7,8 @@ wrap a value in Raw() when it is markup you built yourself.
 
 from html import escape
 
+from core.kindle import POCKETBOOK, device_of
+
 LANGUAGES = ('en', 'de')
 DEFAULT_LANGUAGE = 'en'
 LANGUAGE_NAMES = {'en': '🇬🇧 English', 'de': '🇩🇪 Deutsch'}
@@ -49,19 +51,23 @@ TEXTS = {
         # Setup step 1
         'setup_step1': (
             "<b>Step 1 of 3 · Your Kindle address</b>\n\n"
-            "Send me your Kindle's email address. You'll find it in the Kindle app or on Amazon under "
-            "<i>Devices → your Kindle → Email</i>. It ends in <code>@kindle.com</code>."),
+            "Send me your Kindle's email address. On your <a href=\"{url}\">Amazon devices page</a>, "
+            "pick your Kindle and look for <i>Email</i>. It ends in <code>@kindle.com</code>.\n\n"
+            "<i>Reading on a PocketBook? Send its Send-to-PocketBook address instead, ending in "
+            "<code>@pbsync.com</code>.</i>"),
         'setup_step1_current': (
             "<b>Your Kindle address</b>\n\n"
             "Currently: <code>{email}</code>\n\nSend me a new address to change it, or /cancel."),
         'email_placeholder': "name_ab12@kindle.com",
         'email_invalid': (
             "That doesn't look like a Kindle address. It ends in <code>@kindle.com</code>, e.g. "
-            "<code>name_ab12@kindle.com</code>. Try again or /cancel."),
+            "<code>name_ab12@kindle.com</code> (or <code>@pbsync.com</code> for a PocketBook). Try again or /cancel."),
         'email_not_kindle': (
             "<code>{email}</code> is a regular email address. Your Kindle has its own Send-to-Kindle "
-            "address ending in <code>@kindle.com</code>: find it on Amazon under "
-            "<i>Devices → your Kindle → Email</i>. Try again or /cancel."),
+            "address ending in <code>@kindle.com</code>: on your <a href=\"{url}\">Amazon devices page</a>, "
+            "pick your Kindle and look for <i>Email</i>. On a PocketBook it ends in "
+            "<code>@pbsync.com</code>. "
+            "Try again or /cancel."),
 
         # Setup step 2
         'setup_step2': (
@@ -70,9 +76,12 @@ TEXTS = {
             "Amazon only accepts books from senders you approved. Add this address to your "
             "<i>Approved Personal Document E-mail List</i>:\n\n"
             "<code>{sender}</code>\n\n"
-            "On Amazon: <i>Manage Content & Devices → Preferences → Personal Document Settings</i>."),
+            "On Amazon's <i>Preferences</i> page, scroll down to <i>Personal Document Settings</i>."),
         'btn_copy_sender': "📋 Copy address",
-        'btn_open_amazon': "🔗 Open Amazon settings",
+        'btn_open_amazon': "🔗 Open Amazon settings ({store})",
+        'btn_other_store': "🌍 Other Amazon store",
+        'btn_amazon_store': "🛒 Amazon store: {store}",
+        'btn_back': "← Back",
         'btn_change_email': "✏️ Change address",
         'btn_sender_added': "✅ I've added it",
 
@@ -229,6 +238,50 @@ TEXTS = {
             "<p>Tip: in your browser or reading app, tap <i>Share → Telegram</i> and pick the bot's "
             "chat.</p>"),
 
+        # PocketBook versions of Kindle texts, picked by for_device() for @pbsync.com addresses.
+        # PocketBook has no sender list to fill in: the first book from a new sender makes PocketBook
+        # email the owner, who confirms the sender there.
+        'setup_step2_pocketbook': (
+            "<b>Step 2 of 3 · Allow my address</b>\n\n"
+            "✅ Saved: <code>{email}</code> (PocketBook)\n\n"
+            "PocketBook only accepts books from trusted senders. When my first book arrives, PocketBook "
+            "emails you (at your PocketBook account's address) and asks whether to trust\n\n"
+            "<code>{sender}</code>\n\n"
+            "Confirm it in that email and the book goes to your reader."),
+        'btn_got_it': "✅ Got it",
+        'setup_step3_pocketbook': (
+            "<b>Step 3 of 3 · Test it</b>\n\n"
+            "I'll send a tiny test book to <code>{email}</code>. Confirm my address in PocketBook's email. "
+            "The book then lands in the <i>Send-to-PocketBook</i> folder the next time your reader is online."),
+        'test_sent_pocketbook': (
+            "📨 Test book sent to <code>{email}</code>.\n\n"
+            "If PocketBook emailed you about a new sender, confirm it. Did the book arrive on your "
+            "PocketBook? It shows up once the reader has synced over Wi-Fi."),
+        'setup_done_pocketbook': (
+            "🎉 <b>All set!</b> Send me any article link and it goes straight to your PocketBook.\n\n"
+            "<b>Tip:</b> in your browser or reading app, tap <i>Share → Telegram</i> and pick this chat."),
+        'setup_skipped_pocketbook': (
+            "👍 Saved. Send me any article link and it goes to your PocketBook. If nothing arrives, run the "
+            "test from /settings."),
+        'troubleshoot_pocketbook': (
+            "No problem, it's usually one of these:\n"
+            "<blockquote expandable>"
+            "1. You haven't confirmed <code>{sender}</code> yet. Look for an email from PocketBook in the "
+            "inbox of your PocketBook account, and in spam.\n"
+            "2. The address <code>{email}</code> is wrong. Compare it with <i>Settings → Accounts and "
+            "synchronization → Send-to-PocketBook</i> on your reader.\n"
+            "3. Your reader hasn't synced yet. Connect it to Wi-Fi and open the <i>Send-to-PocketBook</i> "
+            "folder."
+            "</blockquote>"),
+        'target_kindle_pocketbook': "your PocketBook",
+        'target_both_pocketbook': "your PocketBook and this chat",
+        'status_sending_pocketbook': "📧 Sending to your PocketBook…",
+        'footer_kindle_pocketbook': "✅ Sent to your PocketBook. It shows up the next time your reader syncs.",
+        'footer_both_pocketbook': "✅ Also sent to your PocketBook.",
+        'offer_pending_pocketbook': "Want “{title}” on your PocketBook too?",
+        'btn_send_to_kindle_pocketbook': "📖 Send it to PocketBook",
+        'test_book_title_pocketbook': "Your PocketBook setup works!",
+
         'months': "Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec",
     },
 
@@ -261,19 +314,26 @@ TEXTS = {
 
         'setup_step1': (
             "<b>Schritt 1 von 3 · Deine Kindle-Adresse</b>\n\n"
-            "Schick mir die E-Mail-Adresse deines Kindle. Du findest sie in der Kindle-App oder bei "
-            "Amazon unter <i>Geräte → dein Kindle → E-Mail</i>. Sie endet auf <code>@kindle.com</code>."),
+            "Schick mir die E-Mail-Adresse deines Kindle. Wähle auf deiner "
+            "<a href=\"{url}\">Amazon-Geräteseite</a> deinen Kindle aus und schau unter <i>E-Mail</i>. "
+            "Sie endet auf <code>@kindle.com</code>.\n\n"
+            "<i>Du liest auf einem PocketBook? Dann schick mir stattdessen seine Send-to-PocketBook-Adresse, "
+            "die auf <code>@pbsync.com</code> endet.</i>"),
         'setup_step1_current': (
             "<b>Deine Kindle-Adresse</b>\n\n"
             "Aktuell: <code>{email}</code>\n\nSchick mir eine neue Adresse, um sie zu ändern, oder /cancel."),
         'email_placeholder': "name_ab12@kindle.com",
         'email_invalid': (
             "Das sieht nicht nach einer Kindle-Adresse aus. Sie endet auf <code>@kindle.com</code>, z. B. "
-            "<code>name_ab12@kindle.com</code>. Versuch es noch einmal oder /cancel."),
+            "<code>name_ab12@kindle.com</code> (oder <code>@pbsync.com</code> bei einem PocketBook). Versuch es noch "
+            "einmal oder /cancel."),
         'email_not_kindle': (
             "<code>{email}</code> ist eine normale E-Mail-Adresse. Dein Kindle hat eine eigene "
-            "„An Kindle senden“-Adresse, die auf <code>@kindle.com</code> endet: Du findest sie bei Amazon "
-            "unter <i>Geräte → dein Kindle → E-Mail</i>. Versuch es noch einmal oder /cancel."),
+            "„An Kindle senden“-Adresse, die auf <code>@kindle.com</code> endet: Wähle auf deiner "
+            "<a href=\"{url}\">Amazon-Geräteseite</a> deinen Kindle aus und schau unter <i>E-Mail</i>. "
+            "Bei einem PocketBook endet "
+            "sie auf "
+            "<code>@pbsync.com</code>. Versuch es noch einmal oder /cancel."),
 
         'setup_step2': (
             "<b>Schritt 2 von 3 · Meine Adresse freigeben</b>\n\n"
@@ -281,10 +341,13 @@ TEXTS = {
             "Amazon nimmt nur Bücher von freigegebenen Absendern an. Füge diese Adresse zur "
             "<i>Liste genehmigter E-Mail-Adressen für persönliche Dokumente</i> hinzu:\n\n"
             "<code>{sender}</code>\n\n"
-            "Bei Amazon: <i>Inhalte und Geräte verwalten → Einstellungen → Einstellungen für persönliche "
+            "Scroll auf Amazons <i>Einstellungen</i>-Seite nach unten zu <i>Einstellungen für persönliche "
             "Dokumente</i>."),
         'btn_copy_sender': "📋 Adresse kopieren",
-        'btn_open_amazon': "🔗 Amazon-Einstellungen öffnen",
+        'btn_open_amazon': "🔗 Amazon-Einstellungen öffnen ({store})",
+        'btn_other_store': "🌍 Anderer Amazon-Shop",
+        'btn_amazon_store': "🛒 Amazon-Shop: {store}",
+        'btn_back': "← Zurück",
         'btn_change_email': "✏️ Adresse ändern",
         'btn_sender_added': "✅ Hab ich hinzugefügt",
 
@@ -433,6 +496,50 @@ TEXTS = {
             "<p>Tipp: Tippe im Browser oder in deiner Lese-App auf <i>Teilen → Telegram</i> und wähle den "
             "Chat mit dem Bot.</p>"),
 
+        'setup_step2_pocketbook': (
+            "<b>Schritt 2 von 3 · Meine Adresse freigeben</b>\n\n"
+            "✅ Gespeichert: <code>{email}</code> (PocketBook)\n\n"
+            "PocketBook nimmt nur Bücher von vertrauenswürdigen Absendern an. Wenn mein erstes Buch ankommt, "
+            "schreibt dir PocketBook (an die Adresse deines PocketBook-Kontos) und fragt, ob es\n\n"
+            "<code>{sender}</code>\n\n"
+            "vertrauen soll. Bestätige das in dieser E-Mail und das Buch geht an deinen Reader."),
+        'btn_got_it': "✅ Verstanden",
+        'setup_step3_pocketbook': (
+            "<b>Schritt 3 von 3 · Testen</b>\n\n"
+            "Ich schicke ein kleines Testbuch an <code>{email}</code>. Bestätige meine Adresse in der E-Mail "
+            "von PocketBook. Das Buch landet dann im Ordner <i>Send-to-PocketBook</i>, sobald dein Reader "
+            "online ist."),
+        'test_sent_pocketbook': (
+            "📨 Testbuch an <code>{email}</code> geschickt.\n\n"
+            "Falls PocketBook dir wegen eines neuen Absenders geschrieben hat, bestätige ihn. Ist das Buch "
+            "auf deinem PocketBook angekommen? Es erscheint, sobald der Reader über WLAN synchronisiert hat."),
+        'setup_done_pocketbook': (
+            "🎉 <b>Alles bereit!</b> Schick mir einen Artikel-Link und er landet direkt auf deinem "
+            "PocketBook.\n\n"
+            "<b>Tipp:</b> Tippe im Browser oder in deiner Lese-App auf <i>Teilen → Telegram</i> und wähle "
+            "diesen Chat."),
+        'setup_skipped_pocketbook': (
+            "👍 Gespeichert. Schick mir einen Artikel-Link und er geht an dein PocketBook. Falls nichts "
+            "ankommt, starte den Test in /settings."),
+        'troubleshoot_pocketbook': (
+            "Kein Problem, meistens ist es eins davon:\n"
+            "<blockquote expandable>"
+            "1. Du hast <code>{sender}</code> noch nicht bestätigt. Schau im Posteingang deines "
+            "PocketBook-Kontos nach einer E-Mail von PocketBook, auch im Spam.\n"
+            "2. Die Adresse <code>{email}</code> stimmt nicht. Vergleiche sie auf deinem Reader mit "
+            "<i>Einstellungen → Konten und Synchronisierung → Send-to-PocketBook</i>.\n"
+            "3. Dein Reader hat noch nicht synchronisiert. Verbinde ihn mit dem WLAN und öffne den Ordner "
+            "<i>Send-to-PocketBook</i>."
+            "</blockquote>"),
+        'target_kindle_pocketbook': "dein PocketBook",
+        'target_both_pocketbook': "dein PocketBook und diesen Chat",
+        'status_sending_pocketbook': "📧 Sende an dein PocketBook…",
+        'footer_kindle_pocketbook': "✅ An dein PocketBook geschickt. Es erscheint, sobald dein Reader synchronisiert.",
+        'footer_both_pocketbook': "✅ Auch an dein PocketBook geschickt.",
+        'offer_pending_pocketbook': "Möchtest du „{title}“ auch auf deinem PocketBook?",
+        'btn_send_to_kindle_pocketbook': "📖 An PocketBook senden",
+        'test_book_title_pocketbook': "Deine PocketBook-Einrichtung funktioniert!",
+
         'months': "Jan. Feb. März Apr. Mai Juni Juli Aug. Sep. Okt. Nov. Dez.",
     },
 }
@@ -446,6 +553,14 @@ def t(lang: str, key: str, **kwargs) -> str:
     values = {name: value if isinstance(value, Raw) else escape(str(value), quote=False)
               for name, value in kwargs.items()}
     return template.format(**values)
+
+
+def for_device(key: str, address: str | None) -> str:
+    """`key`, or its PocketBook version when `address` is a PocketBook address and that version exists.
+    Kindle stays the default wording everywhere; only texts that would be wrong for a PocketBook differ."""
+    if device_of(address) == POCKETBOOK and f'{key}_pocketbook' in TEXTS[DEFAULT_LANGUAGE]:
+        return f'{key}_pocketbook'
+    return key
 
 
 def resolve_lang(user=None, tg_user=None) -> str:

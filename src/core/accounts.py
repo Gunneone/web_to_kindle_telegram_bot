@@ -109,7 +109,8 @@ def merge(src_id: int, dst_id: int) -> None:
                 dst.kindle_email = src.kindle_email
                 dst.setup_verified = src.setup_verified
                 dst.delivery_mode = dst.delivery_mode or src.delivery_mode
-            for name in ('language', 'username', 'first_name', 'last_name', 'last_book_received_date'):
+            for name in ('language', 'amazon_store', 'username', 'first_name', 'last_name',
+                         'last_book_received_date'):
                 if not getattr(dst, name) and getattr(src, name):
                     setattr(dst, name, getattr(src, name))
             dst.preserve_image_links = dst.preserve_image_links or src.preserve_image_links
