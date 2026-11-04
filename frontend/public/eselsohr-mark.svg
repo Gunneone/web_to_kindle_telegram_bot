@@ -1,7 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" fill="none">
-  <title>Eselsohr</title>
-  <!-- A page with its top-left corner folded over: the dog-ear is the same 45° cut as the g1 chamfer -->
-  <path d="M26 6H50V58H14V18Z" fill="#D9376E"/>
-  <path d="M14 18L26 6V18Z" fill="#F88414"/>
-  <path d="M22 29H42M22 37H42M22 45H33" stroke="#fff" stroke-opacity=".88" stroke-width="3"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Eselsohr">
+  <!-- Light-mode mark for small sizes (header, 32 px and below): a graphite e-reader whose page has its top-left
+       corner dog-eared in g1 blue. Same geometry as eselsohr-mark-dark.svg; only body and screen colors flip. -->
+  <rect x="12" y="3" width="40" height="58" rx="6" fill="#2B2F36"/>
+  <path fill="#F4F5F7" d="M26 7H46.5Q48 7 48 8.5V48.5Q48 50 46.5 50H17.5Q16 50 16 48.5V17Z"/>
+  <path fill="#2097F3" d="M26 7L16 17H26Z"/>
+  <path fill="#4A505A" d="M20 25H44V28H20Z M20 33H38V36H20Z"/>
 </svg>

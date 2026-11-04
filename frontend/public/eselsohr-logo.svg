@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="256" height="256" role="img" aria-label="Eselsohr">
+  <!-- Full-detail light-mode logo for 48 px and up. Dark twin: eselsohr-logo-dark.svg. -->
+  <rect x="12" y="3" width="40" height="58" rx="6" fill="#2B2F36"/>
+  <path fill="#F4F5F7" d="M26 7H46.5Q48 7 48 8.5V48.5Q48 50 46.5 50H17.5Q16 50 16 48.5V17Z"/>
+  <path fill="#2097F3" d="M26 7L16 17H26Z"/>
+  <path fill="#4A505A" d="M29 12H41V14.5H29Z M20 21H44V22.6H20Z M20 25.5H44V27.1H20Z M20 30H44V31.6H20Z M20 34.5H44V36.1H20Z M20 39H44V40.6H20Z M20 43.5H35V45.1H20Z"/>
+  <rect x="28" y="54.2" width="8" height="1.6" rx="0.8" fill="#50565F"/>
+</svg>

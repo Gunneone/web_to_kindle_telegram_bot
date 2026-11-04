@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Eselsohr">
+  <!-- Dark-mode mark for small sizes: the same e-reader as eselsohr-mark.svg with a light body. -->
+  <rect x="12" y="3" width="40" height="58" rx="6" fill="#CDD2D9"/>
+  <path fill="#F7F8FA" d="M26 7H46.5Q48 7 48 8.5V48.5Q48 50 46.5 50H17.5Q16 50 16 48.5V17Z"/>
+  <path fill="#2097F3" d="M26 7L16 17H26Z"/>
+  <path fill="#4A505A" d="M20 25H44V28H20Z M20 33H38V36H20Z"/>
+</svg>
