@@ -140,8 +140,11 @@ def serialize(article: db.Article) -> dict:
             failure = outcome.failure.value
             if outcome.failure in pipeline.USER_FACING and outcome.error:
                 detail = str(outcome.error)
-        if outcome.book:
-            status = status if outcome.failure else (db.PREVIEW if outcome.book.is_preview else db.SENT)
+        if outcome.book and not outcome.failure:
+            if outcome.delivered:
+                status = db.PREVIEW if outcome.book.is_preview else db.SENT
+            elif article.status == db.READY:  # built only, for a look first
+                status = db.READY
         if outcome.failure or outcome.file_too_big:
             status = db.FAILED
     size = file_size(article.epub_path)
@@ -159,6 +162,7 @@ def serialize(article: db.Article) -> dict:
         'created_at': _iso(article.timestamp),
         'size': size,
         'minutes': book.read_minutes if book else None,
+        'paywalled': bool(book.is_preview if book else (article.paywalled or article.status == db.PREVIEW)),
         # The EPUB can be fetched whenever it exists and isn't being written: also after a failed mail
         'can_download': size is not None and not working and article.status != db.PROCESSING,
     }

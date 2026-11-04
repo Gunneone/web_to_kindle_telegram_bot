@@ -11,6 +11,7 @@ import sys
 import tempfile
 import time
 import unittest
+import zipfile
 from pathlib import Path
 from unittest.mock import patch
 from urllib.parse import parse_qs, urlparse
@@ -58,6 +59,36 @@ def settings(**overrides) -> config.Settings:
     return config.Settings(**values)
 
 
+PNG = bytes.fromhex('89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d4944415478da63f8'
+                    'cfc0f01f0005000201a0e1b2d90000000049454e44ae426082')
+
+
+def make_epub(path: str) -> None:
+    """A small EPUB laid out like the converter's, with a few things a preview must not pass on."""
+    with zipfile.ZipFile(path, 'w') as z:
+        z.writestr('mimetype', 'application/epub+zip')
+        z.writestr('META-INF/container.xml',
+                   '<?xml version="1.0"?><container xmlns="urn:oasis:names:tc:opendocument:xmlns:container" '
+                   'version="1.0"><rootfiles><rootfile full-path="EPUB/content.opf" '
+                   'media-type="application/oebps-package+xml"/></rootfiles></container>')
+        z.writestr('EPUB/content.opf',
+                   '<?xml version="1.0"?><package xmlns="http://www.idpf.org/2007/opf" version="3.0"><manifest>'
+                   '<item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>'
+                   '<item id="style" href="style.css" media-type="text/css"/>'
+                   '<item id="img" href="Images/img_001.png" media-type="image/png"/>'
+                   '<item id="content" href="content.xhtml" media-type="application/xhtml+xml"/>'
+                   '</manifest><spine><itemref idref="nav"/><itemref idref="content"/></spine></package>')
+        z.writestr('EPUB/style.css', 'h1 { font-size: 1.4em; } /* </style><script>alert(1)</script> */')
+        z.writestr('EPUB/nav.xhtml', '<html><body><nav>Table of contents</nav></body></html>')
+        z.writestr('EPUB/content.xhtml',
+                   '<html><head><link rel="stylesheet" href="style.css"/></head><body>'
+                   '<h1>A Post</h1><p onclick="steal()">one two three</p>'
+                   '<img src="Images/img_001.png" alt="dot"/><img src="https://tracker.example/pixel.gif"/>'
+                   '<script>steal()</script><a href="javascript:steal()">bad</a>'
+                   '<a href="https://e.com/source">source</a></body></html>')
+        z.writestr('EPUB/Images/img_001.png', PNG)
+
+
 @use_scratch_database
 class ApiCase(unittest.TestCase):
     def setUp(self):
@@ -71,6 +102,7 @@ class ApiCase(unittest.TestCase):
         self.mail_error = None
         self.mailed, self.codes, self.test_books = [], [], []
         self.epubs = 0
+        self.real_epub = False
         patches = [
             patch('core.pipeline.get_website_content', self.fake_scrape),
             patch('core.pipeline.convert_to_epub', self.fake_epub),
@@ -98,7 +130,10 @@ class ApiCase(unittest.TestCase):
     def fake_epub(self, article, image_links=False):
         self.epubs += 1
         path = os.path.join(_DIR, f'book-{time.monotonic_ns()}-{self.epubs}.epub')
-        Path(path).write_bytes(b'PK-fake-epub')
+        if self.real_epub:
+            make_epub(path)
+        else:
+            Path(path).write_bytes(b'PK-fake-epub')
         return path
 
     def client(self, **overrides) -> TestClient:
@@ -126,7 +161,8 @@ class ApiCase(unittest.TestCase):
 class SessionTest(ApiCase):
     def test_anonymous_session(self):
         body = self.client().get('/api/session').json()
-        self.assertEqual(body, {'user': None, 'providers': {'google': False, 'telegram': False, 'email': True}})
+        self.assertEqual(body, {'user': None, 'providers': {'google': False, 'telegram': False, 'email': True},
+                                'feedback': False})
 
     def test_the_account_endpoints_need_a_sign_in(self):
         c = self.client()
@@ -398,6 +434,221 @@ class BookTest(ApiCase):
         first = c.get('/api/books?limit=20').json()
         second = c.get('/api/books?offset=20&limit=20').json()
         self.assertEqual((first['total'], len(first['books']), len(second['books'])), (25, 20, 5))
+
+
+class PreviewTest(BookTest):
+    def built(self, c) -> dict:
+        r = c.post('/api/books', json={'url': 'https://e.com/post'})
+        self.assertEqual(r.status_code, 202, r.text)
+        return self.wait_for(c, r.json()['book']['id'])
+
+    def test_a_book_is_built_first_and_sent_after_a_look(self):
+        c = self.signed_in()
+        book = self.built(c)
+        self.assertEqual((book['status'], book['delivered'], book['can_download']), ('ready', [], True))
+        self.assertEqual(self.mailed, [])
+        self.assertEqual(c.get(f"/api/books/{book['id']}").json()['book']['status'], 'ready')
+        self.assertEqual(c.get(f"/api/books/{book['id']}/epub").status_code, 200)
+        # a ready book isn't "already sent", so making it again needs no confirmation
+        again = c.post('/api/books', json={'url': 'https://e.com/post'})
+        self.assertEqual(again.status_code, 202)
+
+        c.post(f"/api/books/{book['id']}/send", json={'target': 'kindle'})
+        done = self.wait_for(c, book['id'], lambda b: b['status'] == 'sent')
+        self.assertEqual(done['delivered'], ['kindle'])
+        self.assertEqual(self.epubs, 2)  # the send reused the first build
+        self.assertEqual(len(self.mailed), 1)
+
+    def test_a_failed_build_can_be_retried_without_delivering(self):
+        c = self.signed_in()
+        self.scrape_error = BlockedError('refused')
+        book = self.built(c)
+        self.assertEqual(book['status'], 'failed')
+        self.scrape_error = None
+        self.assertEqual(c.post(f"/api/books/{book['id']}/send", json={}).status_code, 202)
+        done = self.wait_for(c, book['id'], lambda b: b['status'] == 'ready')
+        self.assertEqual(done['delivered'], [])
+        self.assertEqual(self.mailed, [])
+
+    def test_a_build_without_a_kindle_address(self):
+        c = self.signed_in(kindle=False)
+        self.assertEqual(self.built(c)['status'], 'ready')
+
+    def test_paywalled_flag(self):
+        self.article.Is_Preview = True
+        c = self.signed_in()
+        self.assertTrue(self.built(c)['paywalled'])
+
+    def test_preview_is_a_self_contained_sandboxed_page(self):
+        self.real_epub = True
+        c = self.signed_in()
+        book = self.built(c)
+        r = c.get(f"/api/books/{book['id']}/preview")
+        self.assertEqual(r.status_code, 200, r.text)
+        self.assertTrue(r.headers['content-type'].startswith('text/html'))
+        csp = r.headers['content-security-policy']
+        self.assertIn("default-src 'none'", csp)
+        self.assertIn("frame-ancestors 'self'", csp)
+        self.assertNotIn('script-src', csp)
+        self.assertEqual(r.headers['cache-control'], 'private, no-store')
+        page = r.text
+        self.assertIn('<h1>A Post</h1>', page)
+        self.assertIn('one two three', page)
+        self.assertIn('src="data:image/png;base64,', page)
+        self.assertIn('font-size: 1.4em', page)
+        self.assertNotIn('Table of contents', page)  # the nav document is skipped
+        body = page.split('<body>', 1)[1]
+        for bad in ('<script', 'onclick', 'javascript:', 'tracker.example'):
+            self.assertNotIn(bad, body.lower(), bad)
+        self.assertEqual(page.count('</style>'), 2)  # the book's style sheet can't close its element early
+        self.assertIn('href="https://e.com/source"', page)
+        self.assertIn('target="_blank"', page)
+
+    def test_preview_needs_a_built_book_of_ones_own(self):
+        self.real_epub = True
+        c = self.signed_in()
+        book = self.built(c)
+        other = self.client()
+        self.sign_in(other, 'bob@example.com')
+        self.assertEqual(other.get(f"/api/books/{book['id']}/preview").status_code, 404)
+        user = db.get_user(-1)
+        unfinished = db.create_article(user.user_id, 'https://e.com/lost')
+        self.assertEqual(c.get(f'/api/books/{unfinished.id}/preview').status_code, 404)
+        os.remove(db.get_article(book['id']).epub_path)
+        self.assertEqual(c.get(f"/api/books/{book['id']}/preview").status_code, 410)
+
+    def test_an_unreadable_book_fails_cleanly(self):
+        c = self.signed_in()
+        book = self.built(c)  # the fake, not a zip
+        r = c.get(f"/api/books/{book['id']}/preview")
+        self.assertEqual((r.status_code, r.json()['error']['code']), (500, 'PREVIEW_FAILED'))
+
+
+class FeedbackTest(BookTest):
+    def setUp(self):
+        super().setUp()
+        self.reports = []
+        self.feedback_error = None
+
+        async def fake_send(settings, user, article, reasons, message, filename):
+            if self.feedback_error:
+                raise self.feedback_error
+            self.reports.append((settings.admin_id, user.user_id, article.id, reasons, message, filename))
+
+        p = patch('web.routes_api.feedback.send', fake_send)
+        p.start()
+        self.addCleanup(p.stop)
+
+    def configured(self):
+        c = self.client(telegram_token='123:abc', admin_id='42')
+        self.sign_in(c)
+        book = c.post('/api/books', json={'url': 'https://e.com/post'}).json()['book']
+        return c, self.wait_for(c, book['id'])
+
+    def test_session_says_whether_feedback_works(self):
+        self.assertFalse(self.client().get('/api/session').json()['feedback'])
+        self.assertTrue(self.client(telegram_token='1:a', admin_id='42').get('/api/session').json()['feedback'])
+
+    def test_feedback_reaches_the_admin(self):
+        c, book = self.configured()
+        r = c.post(f"/api/books/{book['id']}/feedback",
+                   json={'reasons': ['other', 'images'], 'message': '  The photos are gone  '})
+        self.assertEqual(r.status_code, 204, r.text)
+        self.assertEqual(self.reports, [('42', -1, book['id'], ['images', 'other'], 'The photos are gone',
+                                         'A-Post.epub')])
+
+    def test_feedback_needs_something_to_say(self):
+        c, book = self.configured()
+        for body in ({}, {'reasons': [], 'message': '   '}, {'reasons': ['nonsense']},
+                     {'message': 'x' * 1001}):
+            r = c.post(f"/api/books/{book['id']}/feedback", json=body)
+            self.assertEqual((r.status_code, r.json()['error']['code']), (400, 'INVALID_REQUEST'), body)
+        self.assertEqual(self.reports, [])
+
+    def test_feedback_is_limited(self):
+        c, book = self.configured()
+        statuses = [c.post(f"/api/books/{book['id']}/feedback", json={'reasons': ['text']}).status_code
+                    for _ in range(6)]
+        self.assertEqual(statuses, [204] * 5 + [429])
+
+    def test_feedback_without_an_admin(self):
+        c = self.signed_in()
+        book = self.wait_for(c, c.post('/api/books', json={'url': 'https://e.com/post'}).json()['book']['id'])
+        r = c.post(f"/api/books/{book['id']}/feedback", json={'reasons': ['text']})
+        self.assertEqual((r.status_code, r.json()['error']['code']), (503, 'FEEDBACK_UNAVAILABLE'))
+
+    def test_telegram_refusing_the_report(self):
+        from web.feedback import FeedbackError
+        c, book = self.configured()
+        self.feedback_error = FeedbackError('chat not found')
+        r = c.post(f"/api/books/{book['id']}/feedback", json={'reasons': ['text']})
+        self.assertEqual((r.status_code, r.json()['error']['code']), (502, 'FEEDBACK_FAILED'))
+
+    def test_feedback_only_on_ones_own_books(self):
+        c, book = self.configured()
+        other = self.client(telegram_token='123:abc', admin_id='42')
+        self.sign_in(other, 'bob@example.com')
+        r = other.post(f"/api/books/{book['id']}/feedback", json={'reasons': ['text']})
+        self.assertEqual(r.status_code, 404)
+
+    def test_the_admin_report(self):
+        from web import feedback
+        user = db.get_user(self.sign_in(self.client()) and -1)
+        article = db.update_article(db.create_article(user.user_id, 'https://e.com/post?a=1&b=2').id,
+                                    title='<Bold> & co')
+        text = feedback.report_text(user, article, ['images'], 'It <broke>')
+        self.assertIn('&lt;Bold&gt; &amp; co', text)
+        self.assertIn('href="https://e.com/post?a=1&amp;b=2"', text)
+        self.assertIn('Images missing or broken', text)
+        self.assertIn('<blockquote expandable>It &lt;broke&gt;</blockquote>', text)
+        self.assertIn('ann@example.com', text)
+        self.assertIn('email', text)
+
+
+class FeedbackSenderTest(ApiCase):
+    """The real `feedback.send`, with a fake Telegram bot."""
+
+    def test_the_report_goes_out_as_a_message_and_the_book(self):
+        import asyncio
+        from telegram.error import NetworkError
+        from web import feedback
+        calls, fail = [], {}
+
+        class FakeBot:
+            def __init__(self, token):
+                calls.append(('token', token))
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *exc):
+                return False
+
+            async def send_message(self, chat_id, text, **kwargs):
+                if 'message' in fail:
+                    raise fail['message']
+                calls.append(('message', chat_id, kwargs['parse_mode']))
+                return type('Sent', (), {'message_id': 7})()
+
+            async def send_document(self, chat_id, file, filename, reply_parameters, **kwargs):
+                if 'document' in fail:
+                    raise fail['document']
+                calls.append(('document', chat_id, filename, file.read(), reply_parameters.message_id))
+
+        user = db.get_user(self.sign_in(self.client()) and -1)
+        path = os.path.join(_DIR, 'feedback.epub')
+        Path(path).write_bytes(b'PK-book')
+        article = db.update_article(db.create_article(user.user_id, 'https://e.com/post').id, title='T', epub_path=path)
+        conf = settings(telegram_token='1:a', admin_id='42')
+        with patch('web.feedback.Bot', FakeBot):
+            asyncio.run(feedback.send(conf, user, article, ['text'], '', 'T.epub'))
+            self.assertEqual(calls, [('token', '1:a'), ('message', '42', 'HTML'),
+                                     ('document', '42', 'T.epub', b'PK-book', 7)])
+            fail['document'] = NetworkError('upload timed out')
+            asyncio.run(feedback.send(conf, user, article, ['text'], '', 'T.epub'))  # the report itself arrived
+            fail['message'] = NetworkError('no connection')
+            with self.assertRaises(feedback.FeedbackError):
+                asyncio.run(feedback.send(conf, user, article, ['text'], '', 'T.epub'))
 
 
 class ClientFilesTest(ApiCase):

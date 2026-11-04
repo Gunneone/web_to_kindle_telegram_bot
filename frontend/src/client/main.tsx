@@ -6,6 +6,7 @@ import { Layout } from './components/Layout';
 import { RequireUser } from './components/RequireUser';
 import { I18nProvider } from './i18n';
 import { ApiError } from './lib/api';
+import { BookPage } from './routes/Book';
 import { History } from './routes/History';
 import { Home } from './routes/Home';
 import { NotFound } from './routes/NotFound';
@@ -37,6 +38,7 @@ createRoot(document.getElementById('root')!).render(
               <Route path="privacy" element={<Privacy />} />
               <Route element={<RequireUser />}>
                 <Route path="history" element={<History />} />
+                <Route path="books/:id" element={<BookPage />} />
                 <Route path="settings" element={<Settings />} />
               </Route>
               <Route path="*" element={<NotFound />} />

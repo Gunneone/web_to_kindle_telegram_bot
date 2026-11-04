@@ -26,6 +26,7 @@ class State:
     verify_per_ip: RateLimiter = field(default_factory=lambda: RateLimiter(30, 3600))
     books_per_user: RateLimiter = field(default_factory=lambda: RateLimiter(30, 3600))
     test_books_per_user: RateLimiter = field(default_factory=lambda: RateLimiter(3, 3600))
+    feedback_per_user: RateLimiter = field(default_factory=lambda: RateLimiter(5, 3600))
 
 
 def state(request: Request) -> State:

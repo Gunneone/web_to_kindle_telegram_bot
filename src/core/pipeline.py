@@ -133,11 +133,12 @@ async def run(user: db.User, url: str, frontend: Frontend, *, targets: set[str] 
     Never raises for problems with the article, the mail server or the front end's delivery:
     those come back as `Outcome.failure`, already recorded in the history.
 
-    targets:    where to deliver; default is the user's delivery setting
+    targets:    where to deliver; default is the user's delivery setting. An empty set only
+                builds the EPUB (status READY), for a look before it goes anywhere
     article_id: history entry to reuse (resend, retry); its EPUB is reused while it's still on disk
     force:      skip the "you already got this" check
     """
-    targets = targets or user.targets
+    targets = user.targets if targets is None else targets
 
     if not force and article_id is None:
         previous = db.recent_delivery(user.user_id, url)
@@ -147,7 +148,7 @@ async def run(user: db.User, url: str, frontend: Frontend, *, targets: set[str] 
     article = db.get_article(article_id) if article_id else None
     if article is None:
         article = db.create_article(user.user_id, url)
-    reuse = (article_id is not None and article.status in (*db.DELIVERED, None)
+    reuse = (article_id is not None and article.status in (*db.DELIVERED, db.READY, None)
              and bool(article.epub_path) and os.path.exists(article.epub_path))
 
     await frontend.stage(Stage.RECEIVED, article)
@@ -161,8 +162,9 @@ async def run(user: db.User, url: str, frontend: Frontend, *, targets: set[str] 
         too_big = None
         try:
             if reuse:
+                paywalled = article.paywalled if article.paywalled is not None else article.status == db.PREVIEW
                 book = Book(title=article.title or host(url), url=url, epub_path=article.epub_path,
-                            is_preview=article.status == db.PREVIEW)
+                            is_preview=bool(paywalled))
             else:
                 await frontend.stage(Stage.FETCHING, article)
                 content = await asyncio.to_thread(get_website_content, url)
@@ -172,7 +174,7 @@ async def run(user: db.User, url: str, frontend: Frontend, *, targets: set[str] 
                 book = Book(title=content.Title or host(url), url=url, epub_path=epub_path,
                             author=content.Author, publication=content.Publication,
                             words=words, is_preview=bool(content.Is_Preview))
-                db.update_article(article.id, title=book.title, epub_path=epub_path)
+                db.update_article(article.id, title=book.title, epub_path=epub_path, paywalled=int(book.is_preview))
 
             if db.KINDLE in targets:
                 await frontend.stage(Stage.SENDING, article)
@@ -205,6 +207,10 @@ async def run(user: db.User, url: str, frontend: Frontend, *, targets: set[str] 
             if db.KINDLE in delivered:
                 db.update_user(user.user_id, last_book_received_date=date.today().isoformat())
             logger.info(f"Delivered '{book.title}' to user {user.user_id} via {sorted(delivered)}")
+        elif not targets:
+            if not reuse:
+                db.update_article(article.id, status=db.READY, error=None)
+            logger.info(f"Built '{book.title}' for user {user.user_id}, not delivered yet")
         elif not reuse:
             db.update_article(article.id, status=db.FAILED, error=f'EPUB too large to deliver ({too_big} bytes)')
         return Outcome(article.id, book, delivered, file_too_big=too_big)

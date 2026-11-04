@@ -43,6 +43,7 @@ PROCESSING = 'processing'
 SENT = 'sent'
 PREVIEW = 'preview'  # sent, but the post is paywalled and only the free part was included
 FAILED = 'failed'
+READY = 'ready'  # built for a look first (the web preview), not delivered yet
 DELIVERED = (SENT, PREVIEW)  # rows from before the status column (NULL) were successful sends too
 
 
@@ -56,6 +57,7 @@ class Article(Base):
     title = Column(String)
     status = Column(String)
     error = Column(String)
+    paywalled = Column(Integer)  # 1: only the free part of a paywalled post is in the EPUB; NULL: unknown (old rows)
 
 
 class User(Base):

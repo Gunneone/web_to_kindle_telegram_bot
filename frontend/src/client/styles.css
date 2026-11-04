@@ -44,3 +44,118 @@
   display: flex;
   flex-direction: column;
 }
+
+/*
+ * The e-reader around a book preview, modelled on a Kindle Paperwhite (11th/12th gen): a black
+ * soft-touch body under one flush sheet of glass, even bezels on three sides, a deeper chin with
+ * the wordmark, a 3:4 e-ink screen. Proportions follow the real device (124.6 × 174.2 mm, 6.8"
+ * screen). It is a picture of hardware, so it keeps its own colors and rounded corners in both
+ * themes; the page inside the frame has its own styles (src/web/preview.py).
+ */
+:root {
+  --esel-body: #1a1a1c;
+  --esel-body-hi: #2c2c2f;
+  --esel-body-lo: #111112;
+  --esel-mark: #8d8d91;
+  --esel-paper: #f1f1ec;
+  --esel-ink: #161616;
+  --esel-ink-soft: #6b6b68;
+}
+
+.esel-reader {
+  position: relative;
+  width: min(100%, 340px);
+  margin: 0;
+  /* Bezels: 8.4 % of the width at the top and sides; the chin is its own block below the screen */
+  padding: 8.4% 8.4% 0;
+  border-radius: 7% / 5%;
+  background: linear-gradient(160deg, var(--esel-body-hi) 0%, var(--esel-body) 38%, var(--esel-body-lo) 100%);
+  box-shadow:
+    inset 0 0 0 1px rgb(255 255 255 / 0.07),
+    inset 0 1px 0 rgb(255 255 255 / 0.1),
+    0 1px 0 1px rgb(0 0 0 / 0.55),
+    0 18px 40px -12px rgb(0 0 0 / 0.45),
+    0 4px 10px rgb(0 0 0 / 0.18);
+}
+/* Separate the black device from a dark page */
+[data-theme='dark'] .esel-reader {
+  box-shadow:
+    inset 0 0 0 1px rgb(255 255 255 / 0.12),
+    inset 0 1px 0 rgb(255 255 255 / 0.14),
+    0 18px 40px -12px rgb(0 0 0 / 0.8);
+}
+/* The flush front glass: a faint sheen across body and screen */
+.esel-reader::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(118deg, rgb(255 255 255 / 0.07) 0%, rgb(255 255 255 / 0.02) 28%, transparent 46%);
+  pointer-events: none;
+}
+
+.esel-reader__screen {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  aspect-ratio: 3 / 4;
+  background: var(--esel-paper);
+  color: var(--esel-ink);
+  overflow: hidden;
+  /* The edge of the e-ink panel under the glass, and the front light falling off towards it */
+  box-shadow:
+    0 0 0 1px rgb(0 0 0 / 0.7),
+    inset 0 0 5px rgb(0 0 0 / 0.16);
+}
+.esel-reader__screen iframe {
+  display: block;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  border: 0;
+  background: var(--esel-paper);
+}
+/* Kindle's reading footer: time left on the left, how far in on the right */
+.esel-reader__footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 3px 12px 6px;
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-size: 9.5px;
+  line-height: 1.2;
+  color: var(--esel-ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+.esel-reader__status {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 12px;
+  padding: 28px 22px;
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-size: 12px;
+  color: var(--esel-ink-soft);
+  background: var(--esel-paper);
+  /* The progress strip uses the page tokens; on e-ink paper they need the ink colors */
+  --g1-text: var(--esel-ink);
+  --g1-text-muted: var(--esel-ink-soft);
+  --g1-text-subtle: var(--esel-ink-soft);
+  --g1-border: rgb(0 0 0 / 0.15);
+}
+/* The chin, with the wordmark where Kindle has its own (124.6 mm wide device, 25.5 mm chin) */
+.esel-reader__brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 103.6 / 25.5;
+  font-family: var(--g1-font-sans);
+  font-size: 14px;
+  font-weight: 400;
+  letter-spacing: 0.01em;
+  text-transform: lowercase;
+  color: var(--esel-mark);
+  user-select: none;
+}

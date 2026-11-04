@@ -1,26 +1,26 @@
 import { useMutation } from '@tanstack/react-query';
 import { IconArrowRight } from '@tabler/icons-react';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { Link } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 import { BookRow } from '../components/BookRow';
 import { Callout, ErrorCallout } from '../components/Callout';
 import { PageHead, SectionHead } from '../components/Text';
 import { useI18n } from '../i18n';
 import { ApiError, createBook, errorCode, resendBook, type Book, type Target } from '../lib/api';
-import { preferredTarget, rememberTarget, useRecentBooks, useRefreshBooks } from '../lib/books';
+import { useRecentBooks, useRefreshBooks } from '../lib/books';
 import { formatDate } from '../lib/format';
 import { useMe } from '../lib/session';
 
 interface Duplicate {
   book: Book;
   url: string;
-  target: Target;
 }
 
-/** The signed-in start page: paste a link, send or download, watch it get made. */
+/** The signed-in start page: paste a link and the book is made, then opened for a look before it goes anywhere. */
 export function Send() {
   const { t, lang } = useI18n();
   const me = useMe();
+  const navigate = useNavigate();
   const refresh = useRefreshBooks();
   const recent = useRecentBooks();
   const input = useRef<HTMLInputElement>(null);
@@ -31,34 +31,28 @@ export function Send() {
   useEffect(() => input.current?.focus(), []);
 
   const create = useMutation({
-    mutationFn: ({ link, target, force }: { link: string; target: Target; force: boolean }) =>
-      createBook(link, target, force),
-    onSuccess: (_data, { target }) => {
-      rememberTarget(target);
+    mutationFn: ({ link, force }: { link: string; force: boolean }) => createBook(link, force),
+    onSuccess: ({ book }) => {
       setUrl('');
       setDuplicate(null);
       void refresh();
+      void navigate(`/books/${book.id}`);
     },
-    onError: (error, { link, target }) => {
+    onError: (error, { link }) => {
       if (error instanceof ApiError && error.code === 'DUPLICATE') {
-        setDuplicate({ book: error.extra.book as Book, url: link, target });
+        setDuplicate({ book: error.extra.book as Book, url: link });
       }
     },
   });
   const resend = useMutation({
-    mutationFn: ({ book, target }: { book: Book; target: Target }) => resendBook(book.id, target),
-    onSuccess: (_data, { target }) => {
-      rememberTarget(target);
-      void refresh();
-    },
+    mutationFn: ({ book, target }: { book: Book; target?: Target }) => resendBook(book.id, target),
+    onSuccess: () => void refresh(),
   });
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const submitter = (event.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null;
-    const target = (submitter?.value as Target | undefined) ?? preferredTarget(hasKindle);
     setDuplicate(null);
-    create.mutate({ link: url.trim(), target, force: false });
+    create.mutate({ link: url.trim(), force: false });
   };
 
   const createCode = errorCode(create.error);
@@ -100,29 +94,24 @@ export function Send() {
           />
         </div>
         <div className="flex flex-wrap gap-3">
-          {hasKindle && (
-            <button type="submit" value="kindle" className="g1-btn g1-btn--primary" disabled={!url.trim() || create.isPending}>
-              {t('send.toKindle')}
-            </button>
-          )}
-          <button
-            type="submit"
-            value="download"
-            className={hasKindle ? 'g1-btn' : 'g1-btn g1-btn--primary'}
-            disabled={!url.trim() || create.isPending}
-          >
-            {t('send.download')}
+          <button type="submit" className="g1-btn g1-btn--primary" disabled={!url.trim() || create.isPending}>
+            {create.isPending ? t('send.making') : t('send.make')}
           </button>
         </div>
         {duplicate && (
           <Callout tone="info" title={t('send.duplicateTitle', { date: formatDate(duplicate.book.created_at, lang) })}>
             {t('send.duplicateText')}
-            <div className="mt-3">
+            <div className="mt-3 flex flex-wrap gap-2">
+              {duplicate.book.can_download && (
+                <Link className="g1-btn g1-btn--sm" to={`/books/${duplicate.book.id}`}>
+                  {t('send.openIt')}
+                </Link>
+              )}
               <button
                 type="button"
                 className="g1-btn g1-btn--sm"
                 disabled={create.isPending}
-                onClick={() => create.mutate({ link: duplicate.url, target: duplicate.target, force: true })}
+                onClick={() => create.mutate({ link: duplicate.url, force: true })}
               >
                 {t('send.sendAgain')}
               </button>

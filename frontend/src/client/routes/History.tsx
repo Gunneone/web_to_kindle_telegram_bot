@@ -5,7 +5,7 @@ import { ErrorCallout } from '../components/Callout';
 import { PageHead, Scribble } from '../components/Text';
 import { useI18n } from '../i18n';
 import { errorCode, resendBook, type Book, type Target } from '../lib/api';
-import { rememberTarget, useAllBooks, useRefreshBooks } from '../lib/books';
+import { useAllBooks, useRefreshBooks } from '../lib/books';
 import { formatDate } from '../lib/format';
 import { useMe } from '../lib/session';
 
@@ -15,11 +15,8 @@ export function History() {
   const refresh = useRefreshBooks();
   const books = useAllBooks();
   const resend = useMutation({
-    mutationFn: ({ book, target }: { book: Book; target: Target }) => resendBook(book.id, target),
-    onSuccess: (_data, { target }) => {
-      rememberTarget(target);
-      void refresh();
-    },
+    mutationFn: ({ book, target }: { book: Book; target?: Target }) => resendBook(book.id, target),
+    onSuccess: () => void refresh(),
   });
 
   const rows = books.data?.pages.flatMap((page) => page.books) ?? [];

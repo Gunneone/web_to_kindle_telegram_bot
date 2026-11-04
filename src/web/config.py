@@ -31,6 +31,8 @@ class Settings:
     dist_dir: Path
     mail: str  # 'smtp': send sign-in codes by mail; 'log': print them (development)
     g1_ds_url: str  # the shared gunne.one design system
+    telegram_token: str | None = None  # the bot's token: feedback is sent to the admin through it
+    admin_id: str | None = None  # the admin's Telegram chat id
 
     @property
     def https(self) -> bool:
@@ -45,6 +47,11 @@ class Settings:
     def ds_origin(self) -> str:
         parts = urlparse(self.g1_ds_url)
         return f'{parts.scheme}://{parts.netloc}'
+
+    @property
+    def feedback(self) -> bool:
+        """Whether people can report a bad book to the admin."""
+        return bool(self.telegram_token and self.admin_id)
 
     @property
     def providers(self) -> dict[str, bool]:
@@ -78,4 +85,6 @@ def load() -> Settings:
         dist_dir=Path(os.getenv('WEB_DIST_DIR') or DEFAULT_DIST),
         mail=mail,
         g1_ds_url=(os.getenv('G1_DS_URL') or 'https://gunne.one/ds/v1').rstrip('/'),
+        telegram_token=os.getenv('TELEGRAM_TOKEN') or None,
+        admin_id=os.getenv('ADMIN_ID') or None,
     )

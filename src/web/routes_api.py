@@ -9,15 +9,15 @@ import re
 from datetime import date
 
 from fastapi import APIRouter, Depends, Request, Response
-from fastapi.responses import FileResponse
-from pydantic import BaseModel
+from fastapi.responses import FileResponse, HTMLResponse
+from pydantic import BaseModel, Field
 
 from core import accounts, db, kindle, pipeline
 from email_sender import EmailError
 from web_scraper import Article as WebArticle
 from web_scraper.url_utils import normalize_url
 
-from . import jobs
+from . import feedback, jobs, preview
 from .deps import State, current_user, request_language, require_user, state
 from .errors import ApiError
 from .texts import LANGUAGES, t
@@ -48,7 +48,8 @@ def me_payload(user: db.User, request: Request) -> dict:
 @router.get('/session')
 async def get_session(request: Request, app: State = Depends(state)):
     user = current_user(request)
-    return {'user': me_payload(user, request) if user else None, 'providers': app.settings.providers}
+    return {'user': me_payload(user, request) if user else None, 'providers': app.settings.providers,
+            'feedback': app.settings.feedback}
 
 
 class MePatch(BaseModel):
@@ -133,12 +134,12 @@ async def get_book(article_id: int, user: db.User = Depends(require_user)):
 
 class NewBook(BaseModel):
     url: str
-    target: str
+    target: str | None = None  # None: only build it, for a look before it goes anywhere
     force: bool = False
 
 
 class Resend(BaseModel):
-    target: str
+    target: str | None = None  # None: build it again, without delivering (a retry after a failure)
 
 
 def _targets(target: str, user: db.User) -> set[str]:
@@ -165,7 +166,7 @@ def _guard_capacity(user: db.User, app: State) -> None:
 @router.post('/books', status_code=202)
 async def new_book(body: NewBook, user: db.User = Depends(require_user), app: State = Depends(state)):
     url = _clean_url(body.url)
-    targets = _targets(body.target, user)
+    targets = set() if body.target is None else _targets(body.target, user)
     _guard_capacity(user, app)
     article_id, outcome = await jobs.start(user, url, targets, force=body.force)
     if outcome is not None and outcome.duplicate:
@@ -179,7 +180,7 @@ async def new_book(body: NewBook, user: db.User = Depends(require_user), app: St
 async def send_book(article_id: int, body: Resend, user: db.User = Depends(require_user),
                     app: State = Depends(state)):
     article = _owned(article_id, user)
-    targets = _targets(body.target, user)
+    targets = set() if body.target is None else _targets(body.target, user)
     if jobs.is_running(article.id):
         raise ApiError(409, 'ALREADY_RUNNING')
     _guard_capacity(user, app)
@@ -194,12 +195,55 @@ def _filename(title: str | None) -> str:
     return f'{slug or "book"}.epub'
 
 
-@router.get('/books/{article_id}/epub')
-async def download_book(article_id: int, user: db.User = Depends(require_user)):
+def _built(article_id: int, user: db.User) -> db.Article:
+    """The user's book with its EPUB on disk."""
     article = _owned(article_id, user)
-    if article.status == db.PROCESSING or not article.epub_path:  # nothing was built (yet)
+    if article.status == db.PROCESSING or not article.epub_path:  # nothing built (yet)
         raise ApiError(404, 'NOT_FOUND')
     if not os.path.exists(article.epub_path):
         raise ApiError(410, 'FILE_GONE')  # the disk monitor cleans up old books
+    return article
+
+
+@router.get('/books/{article_id}/preview')
+async def preview_book(article_id: int, request: Request, user: db.User = Depends(require_user)):
+    article = _built(article_id, user)
+    try:
+        page = await asyncio.to_thread(preview.render, article.epub_path, article.title,
+                                       request_language(request, user))
+    except preview.PreviewError as e:
+        logger.error(f'Could not preview book {article.id}: {e}')
+        raise ApiError(500, 'PREVIEW_FAILED')
+    return HTMLResponse(page, headers={'Content-Security-Policy': preview.CSP,
+                                       'Cache-Control': 'private, no-store'})
+
+
+class Feedback(BaseModel):
+    reasons: list[str] = Field(default_factory=list, max_length=len(feedback.REASONS))
+    message: str = Field(default='', max_length=feedback.MAX_MESSAGE)
+
+
+@router.post('/books/{article_id}/feedback', status_code=204)
+async def book_feedback(article_id: int, body: Feedback, user: db.User = Depends(require_user),
+                        app: State = Depends(state)):
+    article = _owned(article_id, user)
+    reasons = [r for r in feedback.REASONS if r in body.reasons]  # known ones, in a fixed order
+    message = body.message.strip()
+    if len(reasons) != len(set(body.reasons)) or not (reasons or message):
+        raise ApiError(400, 'INVALID_REQUEST')
+    if not app.settings.feedback:
+        raise ApiError(503, 'FEEDBACK_UNAVAILABLE')
+    if not app.feedback_per_user.allow(str(user.user_id)):
+        raise ApiError(429, 'RATE_LIMITED')
+    try:
+        await feedback.send(app.settings, user, article, reasons, message, _filename(article.title))
+    except feedback.FeedbackError:
+        raise ApiError(502, 'FEEDBACK_FAILED')
+    return Response(status_code=204)
+
+
+@router.get('/books/{article_id}/epub')
+async def download_book(article_id: int, user: db.User = Depends(require_user)):
+    article = _built(article_id, user)
     return FileResponse(article.epub_path, media_type='application/epub+zip', filename=_filename(article.title),
                         headers={'Cache-Control': 'private, no-store'})
