@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en" data-g1-app="eselsohr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script>
+      (function () {
+        try {
+          var m = document.cookie.match(/(?:^|;\s*)g1-theme=(light|dark)/);
+          var t = m ? m[1] : localStorage.getItem('g1-theme');
+          if (t !== 'light' && t !== 'dark') t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+          document.documentElement.setAttribute('data-theme', t);
+        } catch (e) {}
+      })();
+    </script>
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f5f6f8" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0e1116" />
+    <meta name="description" content="Eselsohr — paste a link, read the article on your Kindle." />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="preload" href="%G1_DS_URL%/fonts/ibm-plex-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="%G1_DS_URL%/fonts/caveat-latin-600-normal.woff2" as="font" type="font/woff2" crossorigin />
+    <!-- Shared gunne.one design system; must come before the app CSS (Vite injects that later in <head>). -->
+    <link rel="stylesheet" href="%G1_DS_URL%/gunne.css" />
+    <script defer src="%G1_DS_URL%/theme.js"></script>
+    <title>Eselsohr — read the web on your Kindle</title>
+  </head>
+  <body class="g1-page">
+    <div id="root" class="contents"></div>
+    <script type="module" src="./main.tsx"></script>
+  </body>
+</html>

@@ -70,6 +70,9 @@ Thumbs.db
 
 # Project specific
 *.html
+# ...except the web client's page and the sample book on its start page
+!frontend/src/client/index.html
+!frontend/public/sample/*.html
 *.epub
 *.db
 *.db-wal
