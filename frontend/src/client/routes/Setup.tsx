@@ -9,6 +9,7 @@ import { PageHead } from '../components/Text';
 import { useI18n } from '../i18n';
 import { confirmSetup, errorCode, sendTestBook, updateMe, type Me } from '../lib/api';
 import { useMe, useSetUser } from '../lib/session';
+import { usePageTitle } from '../lib/title';
 
 type Step = 'address' | 'sender' | 'test' | 'done';
 const NUMBERED = ['address', 'sender', 'test'] as const;
@@ -37,6 +38,7 @@ export function Setup() {
 
 function Wizard({ me, initial }: { me: Me; initial: Step }) {
   const { t } = useI18n();
+  usePageTitle(t('titles.setup'));
   const [step, setStep] = useState<Step>(initial);
   // The address step saves on its button: the next step confirms it, like settings that save on change
   const [savedAddress, setSavedAddress] = useState<string | null>(null);

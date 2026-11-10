@@ -20,11 +20,19 @@ export const en = {
     or: 'or',
     back: 'Back',
   },
+  // The tab title of each page: `{page} · Eselsohr`, and the start page on its own
+  titles: {
+    home: 'Eselsohr — read the web on your Kindle',
+    page: '{page} · Eselsohr',
+    setup: 'Setup',
+    notFound: 'Page not found',
+    book: 'Book',
+  },
   nav: {
     main: 'Main',
     footer: 'Footer',
     send: 'Send',
-    history: 'History',
+    library: 'Library',
     settings: 'Settings',
     signIn: 'Sign in',
     privacy: 'Privacy',
@@ -37,7 +45,7 @@ export const en = {
     family: 'a gunne.one project',
   },
   home: {
-    eyebrow: '// web → kindle · dortmund, de',
+    eyebrow: '// web → epub → kindle',
     title: 'Read the web on your Kindle.',
     scribble: '(instead of 47 open tabs)',
     lead: 'Paste a link. Eselsohr turns the article into a book and sends it to your Kindle, or lets you download the EPUB.',
@@ -48,14 +56,14 @@ export const en = {
       placeholder: 'https://example.com/a-long-read',
       submit: 'Make a free preview',
       making: 'Starting',
-      note: 'No account needed to try. Sign in to send books to your Kindle and keep a history.',
+      note: 'No account needed to try. Sign in to send books to your Kindle and keep them in your library.',
     },
     sample: {
       title: 'Sample book: A corner folded down',
       caption: 'A sample book. Scroll it like a page on a Kindle.',
     },
     faq: {
-      eyebrow: '02 / questions',
+      eyebrow: 'questions',
       title: 'Before you start',
       privacyLink: 'Read the privacy page',
       items: {
@@ -81,24 +89,24 @@ export const en = {
         },
       },
     },
-    stepsEyebrow: '01 / how it works',
+    stepsEyebrow: 'how it works',
     stepsTitle: 'Three steps, a few seconds',
     steps: {
-      paste: { eyebrow: '01 / paste', title: 'Paste a link', text: 'Any article: Substack, Medium, a blog, a news site.' },
-      bind: {
-        eyebrow: '02 / bind',
+      paste: { eyebrow: 'step 1 / 3', title: 'Paste a link', text: 'Any article: Substack, Medium, a blog, a news site.' },
+      make: {
+        eyebrow: 'step 2 / 3',
         title: 'We make the book',
         text: 'Text and images are pulled out of the page and bound into an EPUB. Ads and cookie banners stay behind.',
       },
       read: {
-        eyebrow: '03 / read',
+        eyebrow: 'step 3 / 3',
         title: 'Read it anywhere',
         text: 'It lands in your Kindle library, or you download the file and open it in any reading app.',
       },
     },
   },
   send: {
-    eyebrow: 'send · link → book',
+    eyebrow: 'link → book',
     title: 'Send an article',
     lead: 'Paste a link and the book goes to your Kindle in a few seconds. Or look at it first.',
     leadNoKindle: 'Paste a link. In a few seconds you can flip through the book and download it.',
@@ -127,10 +135,10 @@ export const en = {
     duplicateText: 'Make it again if the page changed.',
     sendAgain: 'Make it again',
     openIt: 'Open it',
-    recentEyebrow: 'recent',
+    recentEyebrow: 'from your library',
     recentTitle: 'Latest books',
     recentEmpty: 'No books yet. Paste a link above to make the first one.',
-    allHistory: 'All books',
+    library: 'Open the library',
   },
   shortcuts: {
     eyebrow: 'shortcuts',
@@ -158,7 +166,7 @@ export const en = {
       kindle: 'Sent to Kindle',
       telegram: 'Sent in Telegram',
       sent: 'Sent',
-      notSent: 'Not sent',
+      ready: 'Ready',
       failed: 'Failed',
       interrupted: 'Interrupted',
     },
@@ -200,7 +208,7 @@ export const en = {
   },
   book: {
     eyebrow: 'book · {host}',
-    allBooks: 'All books',
+    backToLibrary: 'Back to the library',
     backToSend: 'Back to Send',
     reader: 'Preview of “{title}”',
     readerLoading: 'Opening the book',
@@ -228,7 +236,7 @@ export const en = {
   feedback: {
     open: 'Something wrong with this book?',
     title: 'What looks wrong?',
-    lead: 'Your note goes straight to the admin, together with this book.',
+    lead: 'Your note goes to the person who runs Eselsohr, together with this book.',
     reasons: {
       text: 'Text is missing or cut off',
       images: 'Images are missing or broken',
@@ -239,15 +247,15 @@ export const en = {
     messageLabel: 'Details (optional)',
     messagePlaceholder: 'The second half of the article is missing.',
     send: 'Send feedback',
-    sentTitle: 'Thanks, that reached the admin.',
+    sentTitle: 'Thanks, your note is on its way.',
     sentText: 'Reports like this help fix how pages are read. You can still send or download the book.',
   },
   signin: {
-    eyebrow: 'sign in · no password',
+    eyebrow: 'no password needed',
     title: 'Sign in',
     lead: {
-      all: 'Use Telegram, Google or your email. With Telegram you get the same account as the bot, with the same Kindle address and history.',
-      telegram: 'Use Telegram or your email. With Telegram you get the same account as the bot, with the same Kindle address and history.',
+      all: 'Use Telegram, Google or your email. With Telegram you get the same account as the bot, with the same Kindle address and library.',
+      telegram: 'Use Telegram or your email. With Telegram you get the same account as the bot, with the same Kindle address and library.',
       google: 'Use Google or your email.',
       email: 'We email you a code. No password needed.',
     },
@@ -267,7 +275,7 @@ export const en = {
     verifyRetry: 'Ask for a new code',
   },
   setup: {
-    eyebrow: 'setup · e-reader',
+    eyebrow: 'kindle · pocketbook',
     title: 'Set up your e-reader',
     lead: 'Books reach your e-reader by email. This takes about two minutes.',
     stepsLabel: 'Setup steps',
@@ -333,8 +341,11 @@ export const en = {
     },
   },
   history: {
-    eyebrow: 'history · {n} books',
-    title: 'History',
+    // The eyebrow counts the books: all of them, or the matches out of all
+    count: '{n} books',
+    countOne: '1 book',
+    countOf: '{n} of {total} books',
+    title: 'Library',
     columns: { title: 'Title', date: 'Date', status: 'Status', actions: 'Actions' },
     empty: 'No books yet.',
     emptyText: 'Paste your first link and it shows up here.',
@@ -347,7 +358,7 @@ export const en = {
     shows: {
       all: 'All books',
       kindle: 'Sent to Kindle',
-      not_sent: 'Not sent',
+      not_sent: 'Ready, not sent',
       failed: 'Failed',
       paywalled: 'Paywalled',
     },
@@ -356,10 +367,10 @@ export const en = {
     showAll: 'Show all books',
   },
   settings: {
-    eyebrow: 'settings',
+    eyebrow: 'e-reader · books · account',
     title: 'Settings',
     kindle: {
-      eyebrow: '01 / e-reader',
+      eyebrow: 'delivery by email',
       title: 'Your e-reader',
       none: 'No Kindle or PocketBook set up.',
       otherReaders: 'Reading on something other than a Kindle or PocketBook? No setup needed: download the EPUB of any book and put it on your reader.',
@@ -370,13 +381,13 @@ export const en = {
       change: 'Change or remove',
     },
     books: {
-      eyebrow: '02 / books',
+      eyebrow: 'for new books',
       title: 'Books',
       imageLinks: 'Tap images to zoom on your Kindle',
       imageLinksHelp: 'A tap on a picture opens it full size. Applies to books made from now on.',
     },
     account: {
-      eyebrow: '03 / account',
+      eyebrow: 'language · sign-in · delete',
       title: 'Account',
       language: 'Language',
       languageHelp: 'For this site and the Telegram bot. Books keep the language of the article.',
@@ -389,23 +400,23 @@ export const en = {
       deleteAccount: 'Delete account',
       deleteTitle: 'Delete everything?',
       deleteText:
-        'This removes your sign-in methods, Kindle address and history. If you use the Telegram bot with the same account, its data goes too. Books already on your Kindle stay there.',
+        'This removes your sign-in methods, Kindle address and library. If you use the Telegram bot with the same account, its data goes too. Books already on your Kindle stay there.',
       deleteConfirm: 'Delete everything',
     },
   },
   privacy: {
-    eyebrow: 'privacy',
+    eyebrow: 'no analytics · no ads',
     title: 'Privacy',
     lead: 'What Eselsohr keeps, why, and for how long.',
     updated: 'October 2026',
     sections: {
       what: {
         title: 'What is stored',
-        text: 'Your sign-in methods (Telegram id, Google id and email address, or the address you signed in with), your Kindle address, your settings, and a history of the links you sent with the title of each book. The links and titles are kept so you can see your history and resend a book.',
+        text: 'Your sign-in methods (Telegram id, Google id and email address, or the address you signed in with), your Kindle address, your settings, and the links you sent with the title of each book. They are kept so you can see them in your library and resend a book.',
       },
       books: {
         title: 'The books',
-        text: 'The EPUB files stay on the server so you can download or resend them. The server deletes the oldest ones when it runs low on disk space. Deleting your account removes your history and your files.',
+        text: 'The EPUB files stay on the server so you can download or resend them. The server deletes the oldest ones when it runs low on disk space. Deleting your account removes your library and your files.',
       },
       mail: {
         title: 'Email',

@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { BrowserRouter, Route, Routes } from 'react-router';
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router';
 import { Layout } from './components/Layout';
 import { RequireUser } from './components/RequireUser';
 import { I18nProvider } from './i18n';
@@ -16,6 +16,12 @@ import { Setup } from './routes/Setup';
 import { SignIn } from './routes/SignIn';
 import { Verify } from './routes/Verify';
 import './styles.css';
+
+/** The library lives at /history (older links and bookmarks); /library leads there too, with its search. */
+function ToLibrary() {
+  const { search } = useLocation();
+  return <Navigate to={`/history${search}`} replace />;
+}
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -41,6 +47,7 @@ createRoot(document.getElementById('root')!).render(
               <Route path="books/:id" element={<BookPage />} />
               <Route element={<RequireUser />}>
                 <Route path="history" element={<History />} />
+                <Route path="library" element={<ToLibrary />} />
                 <Route path="setup" element={<Setup />} />
                 <Route path="settings" element={<Settings />} />
               </Route>
