@@ -66,7 +66,7 @@ class Book:
 
     @property
     def read_minutes(self) -> int | None:
-        return max(1, round(self.words / WORDS_PER_MINUTE)) if self.words else None
+        return read_minutes(self.words)
 
     @property
     def size(self) -> int | None:
@@ -108,6 +108,11 @@ class Frontend:
 
 def host(url: str) -> str:
     return urlparse(url).netloc.removeprefix('www.') or url
+
+
+def read_minutes(words: int | None) -> int | None:
+    """Reading time in whole minutes, at least one; None when the words weren't counted."""
+    return max(1, round(words / WORDS_PER_MINUTE)) if words else None
 
 
 def word_count(html: str) -> int:
@@ -167,7 +172,7 @@ async def run(user: db.User, url: str, frontend: Frontend, *, targets: set[str] 
             if reuse:
                 paywalled = article.paywalled if article.paywalled is not None else article.status == db.PREVIEW
                 book = Book(title=article.title or host(url), url=url, epub_path=article.epub_path,
-                            is_preview=bool(paywalled))
+                            words=article.words or None, is_preview=bool(paywalled))
             else:
                 await frontend.stage(Stage.FETCHING, article)
                 content = await asyncio.to_thread(get_website_content, url)
@@ -177,7 +182,8 @@ async def run(user: db.User, url: str, frontend: Frontend, *, targets: set[str] 
                 book = Book(title=content.Title or host(url), url=url, epub_path=epub_path,
                             author=content.Author, publication=content.Publication,
                             words=words, is_preview=bool(content.Is_Preview))
-                db.update_article(article.id, title=book.title, epub_path=epub_path, paywalled=int(book.is_preview))
+                db.update_article(article.id, title=book.title, epub_path=epub_path, paywalled=int(book.is_preview),
+                                  words=words)
 
             if db.KINDLE in targets:
                 await frontend.stage(Stage.SENDING, article)

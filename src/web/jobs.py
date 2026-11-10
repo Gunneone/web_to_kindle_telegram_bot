@@ -14,6 +14,8 @@ from urllib.parse import urlparse
 from core import db, pipeline
 from core.pipeline import Failure, Outcome, Stage
 
+from . import preview
+
 logger = logging.getLogger(__name__)
 
 # The web delivers to the Kindle only; without a target a book is just built, to look at and download.
@@ -152,6 +154,11 @@ def serialize(article: db.Article) -> dict:
     if outcome is None and status == db.FAILED and size is not None:
         failure = Failure.EMAIL.value  # built, so it was the delivery that failed (the mail server refused it)
     book = outcome.book if outcome else None
+    words = book.words if book and book.words else article.words
+    if words is None and size is not None and not working:
+        # A book from before the word count was kept: count it once from the EPUB
+        words = preview.word_count(article.epub_path)
+        db.update_article(article.id, words=words)
     return {
         'id': article.id,
         'url': article.article_url,
@@ -166,7 +173,7 @@ def serialize(article: db.Article) -> dict:
         'detail': detail,
         'created_at': iso(article.timestamp),
         'size': size,
-        'minutes': book.read_minutes if book else None,
+        'minutes': pipeline.read_minutes(words),
         'paywalled': bool(book.is_preview if book else (article.paywalled or article.status == db.PREVIEW)),
         # The EPUB can be fetched whenever it exists and isn't being written: also after a failed mail, or
         # a restart while it was being mailed (the path is only stored once the file is complete)

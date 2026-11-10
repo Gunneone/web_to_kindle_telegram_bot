@@ -52,7 +52,7 @@ export const en = {
     },
     sample: {
       title: 'Sample book: A corner folded down',
-      caption: 'A sample book. Scroll it like a page on a Kindle.',
+      caption: 'A sample book. Tap or click the right side to turn the page, or swipe.',
     },
     faq: {
       eyebrow: '02 / questions',
@@ -207,7 +207,7 @@ export const en = {
     minutesLeft: '{n} min left in book',
     end: 'End of book',
     percent: '{n}%',
-    readerHint: 'Scroll to read. This is close to what your Kindle shows; fonts and page breaks differ a little.',
+    readerHint: 'Tap or click the right side to turn the page, or swipe. This is close to what your Kindle shows; fonts and page breaks differ a little.',
     readyTitle: 'Looks right?',
     readyText: 'Send it to your Kindle or download the EPUB.',
     downloadEpub: 'Download EPUB',

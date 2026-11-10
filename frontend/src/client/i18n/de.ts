@@ -48,7 +48,7 @@ export const de: Messages = {
     },
     sample: {
       title: 'Beispielbuch: Eine umgeknickte Ecke',
-      caption: 'Ein Beispielbuch. Scroll darin wie auf einer Kindle-Seite.',
+      caption: 'Ein Beispielbuch. Tipp oder klick rechts zum Umblättern, oder wisch.',
     },
     faq: {
       eyebrow: '02 / fragen',
@@ -206,7 +206,7 @@ export const de: Messages = {
     minutesLeft: 'Noch {n} Min. im Buch',
     end: 'Ende des Buchs',
     percent: '{n} %',
-    readerHint: 'Scroll zum Lesen. So ungefähr zeigt es dein Kindle; Schrift und Seitenumbrüche weichen etwas ab.',
+    readerHint: 'Tipp oder klick rechts zum Umblättern, oder wisch. So ungefähr zeigt es dein Kindle; Schrift und Seitenumbrüche weichen etwas ab.',
     readyTitle: 'Sieht gut aus?',
     readyText: 'Sende es an dein Kindle oder lade das EPUB herunter.',
     downloadEpub: 'EPUB herunterladen',

@@ -3,16 +3,37 @@ import { useI18n } from '../i18n';
 
 const WORDS_PER_MINUTE = 230; // as the server counts reading time
 
+/**
+ * Lays the book out in pages, like a Kindle: one column per screen, side by side, and turning a page
+ * moves the body one screen width to the left. The body's padding (16px, as in the book's own style)
+ * is half a gap on either side of every page, so a page is exactly one screen wide.
+ */
+const PAGED_CSS = `
+html { height: 100%; overflow: hidden; touch-action: pan-y pinch-zoom; }
+body {
+  box-sizing: border-box; height: 100%; margin: 0; padding: 16px;
+  column-width: calc(100vw - 32px); column-gap: 32px; column-fill: auto;
+}
+h1, h2, h3, h4, h5, h6 { break-after: avoid; }
+img, svg, video, figure, pre, table, li { break-inside: avoid; }
+img, svg, video { max-height: calc(100vh - 48px) !important; object-fit: contain; }
+hr.eselsohr-break { break-after: column; border: 0; margin: 0; }
+`;
+
+/** How far a finger has to move sideways for a swipe, in CSS pixels */
+const SWIPE = 40;
+
 interface Position {
   percent: number;
   minutesLeft: number | null;
 }
 
 /**
- * A small Kindle-like e-reader with the book on its screen, scrollable like a long page, and the
- * Kindle reading footer (time left, how far in) underneath. The book comes from the server as one
- * self-contained page in a sandboxed frame: no scripts, nothing loaded from elsewhere, links open
- * in a new tab. Without `src` the screen shows `children` instead (progress, or what went wrong).
+ * A small Kindle-like e-reader with the book on its screen in pages, and the Kindle reading footer
+ * (time left, how far in) underneath. Tap or click the right side (or swipe, use the arrow keys or the
+ * mouse wheel) to turn the page; the left third goes back. The book comes from the server as one
+ * self-contained page in a sandboxed frame: no scripts, nothing loaded from elsewhere, links open in a
+ * new tab. Without `src` the screen shows `children` instead (progress, or what went wrong).
  */
 export function EReader({ src, title, children }: { src?: string; title: string; children?: ReactNode }) {
   const { t } = useI18n();
@@ -24,7 +45,8 @@ export function EReader({ src, title, children }: { src?: string; title: string;
     setPosition(null);
   }, [src]);
 
-  // The frame is same-origin (and runs no scripts of its own), so the footer can follow its scrolling
+  // The frame is same-origin and runs no scripts of its own, so the reader lays it out in pages and
+  // listens to it from here (the listeners run in this page)
   useEffect(() => {
     const win = loaded ? frame.current?.contentWindow : null;
     let doc: Document | undefined;
@@ -34,21 +56,117 @@ export function EReader({ src, title, children }: { src?: string; title: string;
       return; // the preview failed and the browser put its own (cross-origin) error page in the frame
     }
     if (!win || !doc?.body) return;
-    const words = (doc.body.innerText || '').split(/\s+/).filter(Boolean).length;
-    const update = () => {
-      const max = doc.documentElement.scrollHeight - win.innerHeight;
-      const done = max > 0 ? Math.min(1, Math.max(0, win.scrollY / max)) : 1;
+    const style = doc.createElement('style');
+    style.textContent = PAGED_CSS;
+    doc.head.append(style);
+    const root = doc.scrollingElement ?? doc.documentElement;
+    const body = doc.body;
+    const words = (body.innerText || '').split(/\s+/).filter(Boolean).length;
+    const width = () => win.innerWidth || 1;
+    let page = 0;
+    let pages = 1;
+    // Where the text ends, counted from the first page: the last page holds that
+    const count = () => {
+      const range = doc.createRange();
+      range.selectNodeContents(body);
+      const end = range.getBoundingClientRect().right + page * width();
+      return Math.max(1, Math.ceil((end - 1) / width()));
+    };
+
+    const show = (next: number) => {
+      pages = count();
+      page = Math.min(pages - 1, Math.max(0, next));
+      body.style.transform = `translateX(${-page * width()}px)`;
+      // Kindle counts what is left after this page
+      const left = (words * (pages - page - 1)) / pages;
       setPosition({
-        percent: Math.round(done * 100),
-        minutesLeft: words > 0 ? Math.max(0, Math.ceil(((1 - done) * words) / WORDS_PER_MINUTE)) : null,
+        percent: Math.round(((page + 1) / pages) * 100),
+        minutesLeft: words > 0 ? (left > 0 ? Math.max(1, Math.round(left / WORDS_PER_MINUTE)) : 0) : null,
       });
     };
-    update();
-    win.addEventListener('scroll', update, { passive: true });
-    win.addEventListener('resize', update);
+    const turn = (by: number) => show(page + by);
+    show(0);
+
+    // Keep the place when the screen changes size (the window, or the phone turned)
+    const resize = () => show(Math.floor((page / pages) * count()));
+    // The browser scrolled the frame to show something on another page (tabbing to a link, find in
+    // page): undo the scroll and turn to that page instead
+    const scroll = () => {
+      const x = root.scrollLeft;
+      if (!x && !root.scrollTop) return;
+      root.scrollLeft = 0;
+      root.scrollTop = 0;
+      const focused = doc.activeElement;
+      const left = focused && focused !== body ? focused.getBoundingClientRect().left : x;
+      show(page + Math.floor(left / width()));
+    };
+    const click = (event: MouseEvent) => {
+      if (event.button !== 0 || (event.target as Element | null)?.closest?.('a[href]')) return;
+      if (doc.getSelection()?.isCollapsed === false) return; // selecting text, not turning
+      turn(event.clientX < width() / 3 ? -1 : 1);
+    };
+    const key = (event: KeyboardEvent) => {
+      if (event.altKey || event.ctrlKey || event.metaKey) return;
+      const keys: Record<string, number> = { ArrowRight: 1, PageDown: 1, ' ': event.shiftKey ? -1 : 1, ArrowLeft: -1, PageUp: -1 };
+      const by = keys[event.key];
+      if (!by) return;
+      event.preventDefault();
+      turn(by);
+    };
+    let start: { x: number; y: number } | null = null;
+    const touchStart = (event: TouchEvent) => {
+      const touch = event.touches[0];
+      start = event.touches.length === 1 && touch ? { x: touch.clientX, y: touch.clientY } : null;
+    };
+    const touchEnd = (event: TouchEvent) => {
+      const touch = event.changedTouches[0];
+      if (!start || !touch) return;
+      const dx = touch.clientX - start.x;
+      const dy = touch.clientY - start.y;
+      start = null;
+      if (Math.abs(dx) > SWIPE && Math.abs(dx) > Math.abs(dy) * 1.5) {
+        event.preventDefault(); // no click after a swipe
+        turn(dx < 0 ? 1 : -1);
+      }
+    };
+    // One page per wheel or trackpad gesture: turn once it has moved far enough, then wait for it to stop
+    let wheeled = 0;
+    let turned = false;
+    let settle: number | undefined;
+    const wheel = (event: WheelEvent) => {
+      if (event.ctrlKey) return; // pinch to zoom
+      event.preventDefault();
+      window.clearTimeout(settle);
+      settle = window.setTimeout(() => {
+        wheeled = 0;
+        turned = false;
+      }, 180);
+      if (turned) return;
+      wheeled += Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
+      if (Math.abs(wheeled) > 40) {
+        turned = true;
+        turn(wheeled > 0 ? 1 : -1);
+      }
+    };
+
+    win.addEventListener('resize', resize);
+    win.addEventListener('scroll', scroll, { passive: true });
+    doc.addEventListener('click', click);
+    doc.addEventListener('keydown', key);
+    doc.addEventListener('touchstart', touchStart, { passive: true });
+    doc.addEventListener('touchend', touchEnd);
+    doc.addEventListener('wheel', wheel, { passive: false });
     return () => {
-      win.removeEventListener('scroll', update);
-      win.removeEventListener('resize', update);
+      window.clearTimeout(settle);
+      win.removeEventListener('resize', resize);
+      win.removeEventListener('scroll', scroll);
+      doc.removeEventListener('click', click);
+      doc.removeEventListener('keydown', key);
+      doc.removeEventListener('touchstart', touchStart);
+      doc.removeEventListener('touchend', touchEnd);
+      doc.removeEventListener('wheel', wheel);
+      style.remove();
+      body.style.transform = '';
     };
   }, [loaded]);
 

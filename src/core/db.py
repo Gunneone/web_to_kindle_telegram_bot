@@ -61,6 +61,9 @@ class Article(Base):
     # Where the book went, comma-separated targets (e.g. 'kindle' or 'kindle,telegram'), added up over resends.
     # NULL: nowhere yet, or a row from before this column (then status says whether it was sent)
     delivered = Column(String)
+    # How many words the article has, for the reading time. NULL: not counted yet (rows from before this
+    # column; the web app counts them from the EPUB); 0: nothing to count (the EPUB couldn't be read)
+    words = Column(Integer)
 
 
 class User(Base):
