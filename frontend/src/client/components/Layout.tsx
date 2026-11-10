@@ -23,7 +23,8 @@ export function Layout() {
   const { pathname, search } = useLocation();
   // Signing in from the header comes back to the page it started on
   const here = pathname + search;
-  const signIn = pathname === '/' || pathname.startsWith('/signin') ? '/signin' : `/signin?next=${encodeURIComponent(here)}`;
+  const onSignIn = pathname.startsWith('/signin');
+  const signIn = pathname === '/' ? '/signin' : `/signin?next=${encodeURIComponent(here)}`;
   return (
     <>
       <a className="g1-skip-link" href="#main">
@@ -42,7 +43,8 @@ export function Layout() {
             </nav>
           )}
           <div className="g1-header__actions">
-            {!me && (
+            {/* Not on the sign-in page itself, where it would only lead back to the same page */}
+            {!me && !onSignIn && (
               <Link to={signIn} className="g1-btn g1-btn--sm">
                 {t('nav.signIn')}
               </Link>

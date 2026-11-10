@@ -27,19 +27,32 @@ export function SignIn() {
   const lead = providers?.telegram ? (providers.google ? 'all' : 'telegram') : providers?.google ? 'google' : 'email';
   return (
     <div className="g1-container g1-container--prose">
-      <PageHead eyebrow={t('signin.eyebrow')} title={t('signin.title')} lead={session.isPending ? undefined : t(`signin.lead.${lead}`)} />
+      <PageHead
+        eyebrow={t('signin.eyebrow')}
+        title={t('signin.title')}
+        lead={
+          session.isPending ? undefined : (
+            <>
+              {t(`signin.lead.${lead}`)}
+              {/* No "sign up" anywhere: the first sign-in makes the account */}
+              <span className="mt-2 block">{t('signin.newHere')}</span>
+            </>
+          )
+        }
+      />
       <div className="g1-stack">
         <ErrorCallout code={params.get('error')} />
         {(providers?.telegram || providers?.google) && (
-          <div className="flex flex-col gap-3 sm:flex-row">
+          // Stacked and as wide as the email field below, so the three ways in read as equals
+          <div className="flex flex-col gap-3">
             {providers.telegram && (
-              <a className="g1-btn g1-btn--lg" href={signInUrl('telegram', next)}>
+              <a className="g1-btn g1-btn--lg w-full justify-center" href={signInUrl('telegram', next)}>
                 <IconBrandTelegram className="g1-icon" aria-hidden />
                 {t('signin.telegram')}
               </a>
             )}
             {providers.google && (
-              <a className="g1-btn g1-btn--lg" href={signInUrl('google', next)}>
+              <a className="g1-btn g1-btn--lg w-full justify-center" href={signInUrl('google', next)}>
                 <IconBrandGoogle className="g1-icon" aria-hidden />
                 {t('signin.google')}
               </a>

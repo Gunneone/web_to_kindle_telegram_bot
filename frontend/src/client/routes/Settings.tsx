@@ -100,7 +100,6 @@ function AccountSection({ me }: { me: Me }) {
   const session = useSession();
   const reset = useResetSession();
   const client = useQueryClient();
-  const [confirming, setConfirming] = useState(false);
   const [connectingEmail, setConnectingEmail] = useState(false);
   const [languageSaved, flashLanguage] = useSavedFlash();
   const language = useMutation({ mutationFn: setLang, onSuccess: flashLanguage });
@@ -112,7 +111,6 @@ function AccountSection({ me }: { me: Me }) {
     await session.refetch();
   };
   const out = useMutation({ mutationFn: signOut, onSuccess: leave });
-  const remove = useMutation({ mutationFn: deleteMe, onSuccess: leave });
   const providers = session.data?.providers;
   const connectable = (['telegram', 'google'] as const).filter((p) => providers?.[p] && !me.providers.includes(p));
 
@@ -120,6 +118,10 @@ function AccountSection({ me }: { me: Me }) {
     <section className="g1-section">
       <SectionHead eyebrow={t('settings.account.eyebrow')} title={t('settings.account.title')} />
       <div className="g1-stack">
+        <div>
+          <div className="g1-label">{t('settings.account.signedInAs')}</div>
+          <p className="m-0 break-all font-medium">{signedInAs(me, t)}</p>
+        </div>
         <div>
           <div className="flex flex-wrap items-baseline justify-between gap-2">
             <label className="g1-label" htmlFor="language">
@@ -158,46 +160,83 @@ function AccountSection({ me }: { me: Me }) {
         </div>
         <div className="flex flex-wrap gap-2">
           {connectable.map((provider) => (
-            <a key={provider} className="g1-btn g1-btn--sm" href={signInUrl(provider, '/settings')}>
+            <a key={provider} className="g1-btn" href={signInUrl(provider, '/settings')}>
               {t('settings.account.connect')} {t(`settings.account.providers.${provider}`)}
             </a>
           ))}
           {!me.providers.includes('email') && !connectingEmail && (
-            <button type="button" className="g1-btn g1-btn--sm" onClick={() => setConnectingEmail(true)}>
+            <button type="button" className="g1-btn" onClick={() => setConnectingEmail(true)}>
               {t('settings.account.connectEmail')}
             </button>
           )}
         </div>
         {connectingEmail && <EmailSignIn next="/settings" onDone={() => void reset().then(() => setConnectingEmail(false))} />}
-        <div className="flex flex-wrap gap-2">
+        <div className="border-t border-line pt-5">
           <button type="button" className="g1-btn" disabled={out.isPending} onClick={() => out.mutate()}>
             {t('settings.account.signOut')}
           </button>
-          {!confirming && (
-            <button type="button" className="g1-btn text-danger [--g1-edge:var(--g1-danger)]" onClick={() => setConfirming(true)}>
-              {t('settings.account.deleteAccount')}
-            </button>
-          )}
         </div>
-        {confirming && (
+        <ErrorCallout code={((language.error ?? out.error) as ApiError | null)?.code} />
+      </div>
+    </section>
+  );
+}
+
+/** Who this is: the email address, else the Telegram name (a Telegram account has no address). */
+function signedInAs(me: Me, t: ReturnType<typeof useI18n>['t']) {
+  if (me.email) return me.email;
+  if (me.name && me.providers.includes('telegram')) return t('settings.account.telegramName', { name: me.name });
+  return me.name ?? '';
+}
+
+/** Deleting the account, at the very bottom and well away from "Sign out", so nobody hits it by accident. */
+function DangerSection() {
+  const { t } = useI18n();
+  const navigate = useNavigate();
+  const session = useSession();
+  const reset = useResetSession();
+  const client = useQueryClient();
+  const [confirming, setConfirming] = useState(false);
+  const remove = useMutation({
+    mutationFn: deleteMe,
+    onSuccess: async () => {
+      await reset();
+      client.clear();
+      navigate('/', { replace: true });
+      await session.refetch();
+    },
+  });
+  return (
+    <section className="g1-section">
+      <SectionHead eyebrow={t('settings.danger.eyebrow')} title={t('settings.danger.title')} />
+      <div className="g1-card g1-stack [--g1-edge:var(--g1-danger)]">
+        <p className="m-0 text-muted">{t('settings.danger.text')}</p>
+        {confirming ? (
           <Callout tone="danger" title={t('settings.account.deleteTitle')}>
             {t('settings.account.deleteText')}
-            <div className="mt-3 flex gap-2">
+            <div className="mt-3 flex flex-wrap gap-2">
               <button
                 type="button"
-                className="g1-btn g1-btn--sm text-danger [--g1-edge:var(--g1-danger)]"
+                className="g1-btn text-danger [--g1-edge:var(--g1-danger)]"
                 disabled={remove.isPending}
+                autoFocus
                 onClick={() => remove.mutate()}
               >
                 {t('settings.account.deleteConfirm')}
               </button>
-              <button type="button" className="g1-btn g1-btn--sm g1-btn--ghost" onClick={() => setConfirming(false)}>
+              <button type="button" className="g1-btn g1-btn--ghost" onClick={() => setConfirming(false)}>
                 {t('common.cancel')}
               </button>
             </div>
           </Callout>
+        ) : (
+          <div>
+            <button type="button" className="g1-btn text-danger [--g1-edge:var(--g1-danger)]" onClick={() => setConfirming(true)}>
+              {t('settings.account.deleteAccount')}
+            </button>
+          </div>
         )}
-        <ErrorCallout code={((language.error ?? out.error ?? remove.error) as ApiError | null)?.code} />
+        <ErrorCallout code={(remove.error as ApiError | null)?.code} />
       </div>
     </section>
   );
@@ -215,6 +254,7 @@ export function Settings() {
       <KindleSection me={me} />
       <BooksSection me={me} />
       <AccountSection me={me} />
+      <DangerSection />
     </div>
   );
 }
