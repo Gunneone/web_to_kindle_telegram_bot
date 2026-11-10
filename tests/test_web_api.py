@@ -33,6 +33,7 @@ from core import accounts, db  # noqa: E402
 from scratch_db import use_scratch_database  # noqa: E402
 from web import auth_oidc, config, jobs  # noqa: E402
 from web.app import create_app  # noqa: E402
+from web.auth_email import send_code as real_send_code  # noqa: E402  (setUp patches the module's)
 from email_sender import EmailError  # noqa: E402
 from web_scraper import Article, BlockedError  # noqa: E402
 
@@ -101,19 +102,23 @@ class ApiCase(unittest.TestCase):
         self.article = Article('https://e.com/post', 'A Post', 'Ann', '2026-11-01', '<p>one two three</p>')
         self.scrape_error = None
         self.mail_error = None
-        self.mailed, self.codes, self.test_books = [], [], []
+        self.mailed, self.codes, self.test_books, self.next_paths = [], [], [], []
         self.epubs = 0
         self.real_epub = False
         patches = [
             patch('core.pipeline.get_website_content', self.fake_scrape),
             patch('core.pipeline.convert_to_epub', self.fake_epub),
             patch('core.pipeline.send_email', self.fake_mail),
-            patch('web.auth_email.send_code', lambda s, email, code, token, lang: self.codes.append((email, code, token))),
+            patch('web.auth_email.send_code', self.fake_code),
             patch('web.routes_api.pipeline.email_article', self.fake_test_book),
         ]
         for p in patches:
             p.start()
             self.addCleanup(p.stop)
+
+    def fake_code(self, settings, email, code, token, lang, next_path='/'):
+        self.codes.append((email, code, token))
+        self.next_paths.append(next_path)
 
     def fake_mail(self, address, path):
         if self.mail_error:
@@ -215,6 +220,22 @@ class SessionTest(ApiCase):
         self.assertEqual(email, 'ann@example.com')
         self.assertEqual(c.post('/api/auth/email/verify', json={'token': token}).status_code, 200)
         self.assertEqual(c.post('/api/auth/email/verify', json={'token': token}).json()['error']['code'], 'EXPIRED')
+
+    def test_the_link_leads_back_to_where_sign_in_started(self):
+        c = self.client()
+        cases = (('/books/7', '/books/7'), ('//evil.com', '/'), ('https://evil.com', '/'), (None, '/'))
+        for i, (asked, kept) in enumerate(cases):  # one address each: a single address may only ask so often
+            body = {'email': f'ann{i}@example.com'} | ({'next': asked} if asked else {})
+            self.assertEqual(c.post('/api/auth/email/start', json=body).status_code, 204)
+            self.assertEqual(self.next_paths[-1], kept, asked)
+
+    def test_the_mailed_link_carries_the_next_path(self):
+        sent = []
+        with patch('web.auth_email.logger.warning', lambda message: sent.append(message)):
+            real_send_code(settings(), 'ann@example.com', '123456', 'tok', 'en', '/books/7?x=1')
+            real_send_code(settings(), 'ann@example.com', '123456', 'tok', 'en')
+        self.assertIn('/signin/verify?token=tok&next=/books/7%3Fx%3D1)', sent[0])
+        self.assertIn('/signin/verify?token=tok)', sent[1])
 
     def test_new_code_replaces_the_old_one(self):
         c = self.client()
@@ -331,20 +352,24 @@ class AccountTest(ApiCase):
         self.assertIsNotNone(c.get('/api/session').json()['user']['test_sent_at'])
         self.assertIsNone(c.patch('/api/me', json={'kindle_email': 'new@kindle.com'}).json()['user']['test_sent_at'])
 
-    def test_reading_without_a_kindle(self):
+    def test_the_address_stays_until_it_is_removed(self):
         c = self.client()
         self.sign_in(c)
         uid = -1  # the first web account
-        self.assertFalse(c.get('/api/session').json()['user']['download_only'])
-        self.assertTrue(c.patch('/api/me', json={'download_only': True}).json()['user']['download_only'])
-        self.assertEqual(db.get_user(uid).delivery_mode, db.TELEGRAM)  # the bot sends files to the chat too
-        # setting up a Kindle later means delivering to it, in the bot as well
         user = c.patch('/api/me', json={'kindle_email': 'ann@kindle.com'}).json()['user']
-        self.assertFalse(user['download_only'])
-        self.assertEqual(db.get_user(uid).delivery_mode, db.KINDLE)
-        c.patch('/api/me', json={'download_only': True})
-        self.assertFalse(c.patch('/api/me', json={'download_only': False}).json()['user']['download_only'])
-        self.assertEqual(db.get_user(uid).delivery_mode, db.KINDLE)
+        self.assertEqual(user['kindle_email'], 'ann@kindle.com')
+        self.assertEqual(db.get_user(uid).delivery_mode, db.KINDLE)  # the bot delivers there too
+        self.assertNotIn('download_only', user)  # reading on something else needs no setting: books download
+        # other settings leave it alone
+        for change in ({'image_links': True}, {'language': 'de'}, {'amazon_store': 'amazon.de'}, {'download_only': True}):
+            self.assertEqual(c.patch('/api/me', json=change).json()['user']['kindle_email'], 'ann@kindle.com', change)
+        r = c.post('/api/books', json={'url': 'https://e.com/post', 'target': 'kindle'})
+        self.assertEqual(self.wait_for(c, r.json()['book']['id'])['delivered'], ['kindle'])
+        # removing it is its own request
+        user = c.patch('/api/me', json={'kindle_email': ''}).json()['user']
+        self.assertEqual((user['kindle_email'], user['setup_verified']), (None, False))
+        r = c.post('/api/books', json={'url': 'https://e.com/other', 'target': 'kindle'})
+        self.assertEqual(r.json()['error']['code'], 'NO_KINDLE')
 
     def test_deleting_the_account(self):
         c = self.client()
@@ -368,11 +393,11 @@ class BookTest(ApiCase):
 
     def test_download_flow(self):
         c = self.signed_in()
-        r = c.post('/api/books', json={'url': 'e.com/post', 'target': 'download'})
+        r = c.post('/api/books', json={'url': 'e.com/post'})
         self.assertEqual(r.status_code, 202, r.text)
         book = self.wait_for(c, r.json()['book']['id'])
         self.assertEqual((book['status'], book['delivered'], book['title'], book['host']),
-                         ('sent', ['download'], 'A Post', 'e.com'))
+                         ('ready', [], 'A Post', 'e.com'))
         self.assertEqual(book['minutes'], 1)
         self.assertTrue(book['can_download'])
         self.assertEqual(self.mailed, [])
@@ -398,14 +423,15 @@ class BookTest(ApiCase):
     def test_bad_requests(self):
         c = self.signed_in()
         for url in ('', 'not a url', 'ftp://e.com/x', 'https://nodot', 'https://e.com/' + 'a' * 2100):
-            r = c.post('/api/books', json={'url': url, 'target': 'download'})
+            r = c.post('/api/books', json={'url': url})
             self.assertEqual((r.status_code, r.json()['error']['code']), (400, 'INVALID_URL'), url[:30])
-        r = c.post('/api/books', json={'url': 'https://e.com/post', 'target': 'carrier-pigeon'})
-        self.assertEqual(r.json()['error']['code'], 'INVALID_TARGET')
+        for target in ('carrier-pigeon', 'download'):  # the web hands books over as downloads, not as a target
+            r = c.post('/api/books', json={'url': 'https://e.com/post', 'target': target})
+            self.assertEqual(r.json()['error']['code'], 'INVALID_TARGET')
 
     def test_duplicates_are_reported_and_can_be_forced(self):
         c = self.signed_in()
-        first = c.post('/api/books', json={'url': 'https://e.com/post', 'target': 'download'}).json()['book']
+        first = c.post('/api/books', json={'url': 'https://e.com/post', 'target': 'kindle'}).json()['book']
         self.wait_for(c, first['id'])
         r = c.post('/api/books', json={'url': 'https://e.com/post', 'target': 'kindle'})
         self.assertEqual((r.status_code, r.json()['error']['code']), (409, 'DUPLICATE'))
@@ -416,7 +442,7 @@ class BookTest(ApiCase):
 
     def test_resend_reuses_the_book(self):
         c = self.signed_in()
-        book = c.post('/api/books', json={'url': 'https://e.com/post', 'target': 'download'}).json()['book']
+        book = c.post('/api/books', json={'url': 'https://e.com/post'}).json()['book']
         self.wait_for(c, book['id'])
         epubs_before = self.epubs
         r = c.post(f"/api/books/{book['id']}/send", json={'target': 'kindle'})
@@ -429,7 +455,7 @@ class BookTest(ApiCase):
     def test_failures_say_what_went_wrong(self):
         c = self.signed_in()
         self.scrape_error = BlockedError('example.com refused the request (HTTP 403)')
-        book = c.post('/api/books', json={'url': 'https://e.com/post', 'target': 'download'}).json()['book']
+        book = c.post('/api/books', json={'url': 'https://e.com/post'}).json()['book']
         done = self.wait_for(c, book['id'])
         self.assertEqual((done['status'], done['failure'], done['can_download']), ('failed', 'blocked', False))
         self.assertIn('403', done['detail'])
@@ -444,15 +470,78 @@ class BookTest(ApiCase):
         self.assertIsNone(done['detail'])  # mail server details stay on the server
         self.assertEqual(c.get(f"/api/books/{book['id']}/epub").content, b'PK-fake-epub')
 
+    def test_a_failed_send_goes_out_again_without_rebuilding(self):
+        c = self.signed_in()
+        self.mail_error = EmailError('refused')
+        book = c.post('/api/books', json={'url': 'https://e.com/post', 'target': 'kindle'}).json()['book']
+        self.wait_for(c, book['id'])
+        jobs.LIVE.clear()  # later, or after a restart: only the database is left
+        later = c.get(f"/api/books/{book['id']}").json()['book']
+        self.assertEqual((later['status'], later['failure'], later['can_download']), ('failed', 'email', True))
+        self.mail_error = None
+        self.scrape_error = BlockedError('refused')  # the site may block us by now: it doesn't matter
+        c.post(f"/api/books/{book['id']}/send", json={'target': 'kindle'})
+        done = self.wait_for(c, book['id'], lambda b: b['status'] != 'processing')
+        self.assertEqual((done['status'], done['delivered'], self.epubs), ('sent', ['kindle'], 1))
+        jobs.LIVE.clear()
+        self.assertEqual(c.get(f"/api/books/{book['id']}").json()['book']['status'], 'sent')
+
+    def test_a_book_on_the_kindle_can_be_sent_again(self):
+        c = self.signed_in()
+        book = c.post('/api/books', json={'url': 'https://e.com/post', 'target': 'kindle'}).json()['book']
+        self.wait_for(c, book['id'])
+        r = c.post(f"/api/books/{book['id']}/send", json={'target': 'kindle'})  # it never showed up
+        self.assertEqual(r.status_code, 202)
+        done = self.wait_for(c, book['id'])
+        self.assertEqual((done['status'], done['delivered'], len(self.mailed), self.epubs), ('sent', ['kindle'], 2, 1))
+
+    def test_a_book_whose_send_failed_can_be_kept_unsent(self):
+        c = self.signed_in()
+        self.mail_error = EmailError('refused')
+        book = c.post('/api/books', json={'url': 'https://e.com/post', 'target': 'kindle'}).json()['book']
+        self.wait_for(c, book['id'])
+        c.post(f"/api/books/{book['id']}/send", json={})  # no target: just the book, to download
+        self.assertEqual(self.wait_for(c, book['id'])['status'], 'ready')
+        jobs.LIVE.clear()
+        self.assertEqual((c.get(f"/api/books/{book['id']}").json()['book']['status'], self.epubs), ('ready', 1))
+
+    def test_a_send_cut_off_by_a_restart_can_be_downloaded_and_sent_again(self):
+        c = self.signed_in()
+        built = self.wait_for(c, c.post('/api/books', json={'url': 'https://e.com/post'}).json()['book']['id'])
+        db.update_article(built['id'], status=db.PROCESSING)  # as left by a restart while mailing
+        book = c.get(f"/api/books/{built['id']}").json()['book']
+        self.assertEqual((book['status'], book['can_download']), ('interrupted', True))
+        self.assertEqual(c.get(f"/api/books/{built['id']}/epub").status_code, 200)
+        c.post(f"/api/books/{built['id']}/send", json={'target': 'kindle'})
+        done = self.wait_for(c, built['id'])
+        self.assertEqual((done['status'], done['delivered'], self.epubs), ('sent', ['kindle'], 1))
+
+    def test_the_book_can_be_read_while_it_is_sent_again(self):
+        c = self.signed_in()
+        built = self.wait_for(c, c.post('/api/books', json={'url': 'https://e.com/post'}).json()['book']['id'])
+        jobs.LIVE[built['id']] = jobs.Live(-1)  # a resend under way
+        self.assertEqual(c.get(f"/api/books/{built['id']}/epub").status_code, 200)
+
+    def test_a_failed_resend_of_an_interrupted_book_shows_as_failed(self):
+        c = self.signed_in()
+        built = self.wait_for(c, c.post('/api/books', json={'url': 'https://e.com/post'}).json()['book']['id'])
+        db.update_article(built['id'], status=db.PROCESSING)
+        self.mail_error = EmailError('refused')
+        c.post(f"/api/books/{built['id']}/send", json={'target': 'kindle'})
+        self.wait_for(c, built['id'])
+        jobs.LIVE.clear()
+        book = c.get(f"/api/books/{built['id']}").json()['book']
+        self.assertEqual((book['status'], book['failure']), ('failed', 'email'))
+
     def test_retry_after_a_failure(self):
         c = self.signed_in()
         self.scrape_error = BlockedError('refused')
-        book = c.post('/api/books', json={'url': 'https://e.com/post', 'target': 'download'}).json()['book']
+        book = c.post('/api/books', json={'url': 'https://e.com/post', 'target': 'kindle'}).json()['book']
         self.wait_for(c, book['id'])
         self.scrape_error = None
-        c.post(f"/api/books/{book['id']}/send", json={'target': 'download'})
+        c.post(f"/api/books/{book['id']}/send", json={'target': 'kindle'})
         done = self.wait_for(c, book['id'], lambda b: b['status'] == 'sent')
-        self.assertEqual(done['delivered'], ['download'])
+        self.assertEqual(done['delivered'], ['kindle'])
 
     def test_a_server_restart_shows_unfinished_books_as_interrupted(self):
         c = self.signed_in()
@@ -463,22 +552,80 @@ class BookTest(ApiCase):
 
     def test_other_peoples_books_are_off_limits(self):
         owner = self.signed_in()
-        book = owner.post('/api/books', json={'url': 'https://e.com/post', 'target': 'download'}).json()['book']
+        book = owner.post('/api/books', json={'url': 'https://e.com/post'}).json()['book']
         self.wait_for(owner, book['id'])
         other = self.client()
         self.sign_in(other, 'bob@example.com')
         self.assertEqual(other.get(f"/api/books/{book['id']}").status_code, 404)
         self.assertEqual(other.get(f"/api/books/{book['id']}/epub").status_code, 404)
-        self.assertEqual(other.post(f"/api/books/{book['id']}/send", json={'target': 'download'}).status_code, 404)
+        self.assertEqual(other.post(f"/api/books/{book['id']}/send", json={}).status_code, 404)
+        self.assertEqual(other.delete(f"/api/books/{book['id']}").status_code, 404)
         self.assertEqual(other.get('/api/books').json()['total'], 0)
 
     def test_files_removed_by_the_disk_monitor_are_gone(self):
         c = self.signed_in()
-        book = c.post('/api/books', json={'url': 'https://e.com/post', 'target': 'download'}).json()['book']
+        book = c.post('/api/books', json={'url': 'https://e.com/post'}).json()['book']
         self.wait_for(c, book['id'])
         os.remove(db.get_article(book['id']).epub_path)
         self.assertEqual(c.get(f"/api/books/{book['id']}/epub").status_code, 410)
         self.assertFalse(c.get(f"/api/books/{book['id']}").json()['book']['can_download'])
+
+    def test_where_a_book_went_is_kept(self):
+        c = self.signed_in()
+        book = c.post('/api/books', json={'url': 'https://e.com/post'}).json()['book']
+        self.assertEqual(self.wait_for(c, book['id'])['delivered'], [])
+        c.post(f"/api/books/{book['id']}/send", json={'target': 'kindle'})
+        self.wait_for(c, book['id'], lambda b: b['status'] == 'sent')
+        jobs.LIVE.clear()  # as after a restart: only the database is left
+        again = c.get(f"/api/books/{book['id']}").json()['book']
+        self.assertEqual((again['status'], again['delivered']), ('sent', ['kindle']))
+        self.assertEqual(c.get('/api/session').json()['user']['kindle_books'], 1)
+
+    def test_a_bot_delivery_adds_to_the_kindle_one(self):
+        c = self.signed_in()
+        article = db.create_article(-1, 'https://e.com/a')
+        db.update_article(article.id, status=db.SENT, delivered='kindle,telegram')
+        self.assertEqual(c.get(f'/api/books/{article.id}').json()['book']['delivered'], ['kindle', 'telegram'])
+
+    def test_history_search_and_filters(self):
+        c = self.signed_in()
+        rows = [('https://e.com/a', 'Cats and dogs', db.SENT, 'kindle', 0),
+                ('https://news.org/b', 'Weather 100%', db.READY, None, 1),
+                ('https://e.com/c', 'Dog days', db.FAILED, None, 0),
+                ('https://e.com/d', 'Old one', db.PREVIEW, None, None)]
+        for url, title, status, delivered, paywalled in rows:
+            db.update_article(db.create_article(-1, url).id, title=title, status=status, delivered=delivered,
+                              paywalled=paywalled)
+        titles = lambda query: sorted(b['title'] for b in c.get(f'/api/books?{query}').json()['books'])
+        self.assertEqual(titles('q=dog'), ['Cats and dogs', 'Dog days'])
+        self.assertEqual(titles('q=news.org'), ['Weather 100%'])
+        self.assertEqual(titles('q=100%25'), ['Weather 100%'])
+        self.assertEqual(titles('q=%25'), ['Weather 100%'])  # a % is looked for, not a wildcard
+        self.assertEqual(titles('show=kindle'), ['Cats and dogs'])
+        self.assertEqual(titles('show=not_sent'), ['Weather 100%'])
+        self.assertEqual(titles('show=failed'), ['Dog days'])
+        self.assertEqual(titles('show=paywalled'), ['Old one', 'Weather 100%'])
+        self.assertEqual(titles('q=dog&show=failed'), ['Dog days'])
+        self.assertEqual(c.get('/api/books?q=dog').json()['total'], 2)
+        self.assertEqual(c.get('/api/books?show=nonsense').status_code, 400)
+
+    def test_deleting_one_book(self):
+        c = self.signed_in()
+        keep = self.wait_for(c, c.post('/api/books', json={'url': 'https://e.com/keep'}).json()['book']['id'])
+        gone = self.wait_for(c, c.post('/api/books', json={'url': 'https://e.com/gone'}).json()['book']['id'])
+        path = db.get_article(gone['id']).epub_path
+        self.assertEqual(c.delete(f"/api/books/{gone['id']}").status_code, 204)
+        self.assertFalse(os.path.exists(path))
+        self.assertEqual(c.get(f"/api/books/{gone['id']}").status_code, 404)
+        self.assertEqual([b['id'] for b in c.get('/api/books').json()['books']], [keep['id']])
+        self.assertEqual(c.delete(f"/api/books/{gone['id']}").status_code, 404)
+
+    def test_a_book_being_made_cannot_be_deleted(self):
+        c = self.signed_in()
+        article = db.create_article(-1, 'https://e.com/busy')
+        jobs.LIVE[article.id] = jobs.Live(-1)
+        r = c.delete(f'/api/books/{article.id}')
+        self.assertEqual((r.status_code, r.json()['error']['code']), (409, 'ALREADY_RUNNING'))
 
     def test_history_pages(self):
         c = self.signed_in()
@@ -498,11 +645,15 @@ class GuestTest(BookTest):
         self.assertEqual(r.status_code, 202, r.text)
         return self.wait_for(c, r.json()['book']['id'])
 
-    def test_a_visitor_can_make_look_at_and_download_a_book(self):
+    def test_a_visitor_can_make_and_look_at_a_book_but_not_download_it(self):
         c = self.client()
         book = self.try_book(c)
-        self.assertEqual((book['status'], book['can_download']), ('ready', True))
-        self.assertEqual(c.get(f"/api/books/{book['id']}/epub").status_code, 200)
+        self.assertEqual(book['status'], 'ready')
+        self.real_epub = True
+        book = self.try_book(c, 'https://e.com/other')
+        self.assertEqual(c.get(f"/api/books/{book['id']}/preview").status_code, 200)
+        r = c.get(f"/api/books/{book['id']}/epub")
+        self.assertEqual((r.status_code, r.json()['error']['code']), (401, 'UNAUTHENTICATED'))
         self.assertIsNone(c.get('/api/session').json()['user'])  # still not signed in
         self.assertEqual(c.get('/api/books').status_code, 401)  # no history, no settings
         self.assertEqual(c.patch('/api/me', json={'kindle_email': 'x@kindle.com'}).status_code, 401)

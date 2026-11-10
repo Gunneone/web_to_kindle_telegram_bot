@@ -5,7 +5,7 @@ import {
   IconMoon,
   IconSun,
 } from '@tabler/icons-react';
-import { Link, NavLink, Outlet } from 'react-router';
+import { Link, NavLink, Outlet, useLocation } from 'react-router';
 import { useI18n } from '../i18n';
 import { useMe } from '../lib/session';
 import { Brand } from './Brand';
@@ -20,6 +20,10 @@ const SOCIAL = [
 export function Layout() {
   const { t } = useI18n();
   const me = useMe();
+  const { pathname, search } = useLocation();
+  // Signing in from the header comes back to the page it started on
+  const here = pathname + search;
+  const signIn = pathname === '/' || pathname.startsWith('/signin') ? '/signin' : `/signin?next=${encodeURIComponent(here)}`;
   return (
     <>
       <a className="g1-skip-link" href="#main">
@@ -39,7 +43,7 @@ export function Layout() {
           )}
           <div className="g1-header__actions">
             {!me && (
-              <Link to="/signin" className="g1-btn g1-btn--sm">
+              <Link to={signIn} className="g1-btn g1-btn--sm">
                 {t('nav.signIn')}
               </Link>
             )}

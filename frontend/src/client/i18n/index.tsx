@@ -49,7 +49,8 @@ function stored(): Lang | null {
 
 interface I18n {
   lang: Lang;
-  setLang: (lang: Lang) => void;
+  /** Resolves once the account has stored it (at once when signed out); rejects if that failed. */
+  setLang: (lang: Lang) => Promise<void>;
   t: (key: MessageKey, vars?: Record<string, string | number>) => string;
   /** Text for a code like `RATE_LIMITED` from the API or the sign-in redirect, with a safe fallback. */
   error: (code: string | undefined | null) => string;
@@ -75,11 +76,8 @@ export function I18nProvider({ children }: { children: ReactNode }) {
       } catch {
         /* private mode: the choice lasts until the page closes */
       }
-      if (session.data?.user) {
-        updateMe({ language: next })
-          .then(() => session.refetch())
-          .catch(() => undefined);
-      }
+      if (!session.data?.user) return Promise.resolve();
+      return updateMe({ language: next }).then(() => void session.refetch());
     },
     [session],
   );

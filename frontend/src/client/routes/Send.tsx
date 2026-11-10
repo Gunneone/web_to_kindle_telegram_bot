@@ -4,14 +4,15 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { BookRow } from '../components/BookRow';
 import { Callout, ErrorCallout } from '../components/Callout';
-import { PasteButton } from '../components/PasteButton';
+import { checkLinks, LinkField } from '../components/LinkField';
 import { PageHead, SectionHead } from '../components/Text';
+import { UnconfirmedCallout } from '../components/Unconfirmed';
 import { useI18n } from '../i18n';
-import { ApiError, createBook, errorCode, resendBook, updateMe, type Book, type Target } from '../lib/api';
+import { ApiError, createBook, errorCode, resendBook, type Book, type Target } from '../lib/api';
 import { useRecentBooks, useRefreshBooks } from '../lib/books';
 import { formatDate } from '../lib/format';
-import { bookmarklet, extractLinks, MAX_LINKS } from '../lib/links';
-import { useMe, useSetUser } from '../lib/session';
+import { bookmarklet, MAX_LINKS } from '../lib/links';
+import { useMe } from '../lib/session';
 
 interface Duplicate {
   book: Book;
@@ -34,7 +35,6 @@ interface Started {
 export function Send({ initialLink = '' }: { initialLink?: string }) {
   const { t, lang } = useI18n();
   const me = useMe();
-  const setUser = useSetUser();
   const navigate = useNavigate();
   const refresh = useRefreshBooks();
   const recent = useRecentBooks();
@@ -42,6 +42,12 @@ export function Send({ initialLink = '' }: { initialLink?: string }) {
   const primary = useRef<HTMLButtonElement>(null);
   const [url, setUrl] = useState(initialLink);
   const [result, setResult] = useState<Started | null>(null);
+  // What's wrong with the link itself, shown at the field until it changes
+  const [fieldError, setFieldError] = useState<string | null>(null);
+  const edit = (value: string) => {
+    setUrl(value);
+    setFieldError(null);
+  };
   const hasKindle = Boolean(me?.kindle_email);
   const pocketbook = me?.device === 'pocketbook';
 
@@ -67,10 +73,16 @@ export function Send({ initialLink = '' }: { initialLink?: string }) {
     onSuccess: (outcome, { links }) => {
       void refresh();
       if (outcome.started.length > 0) setUrl('');
+      // One link the server couldn't read as an address: say so at the field, like a typo caught here
+      if (links.length === 1 && outcome.failures[0]?.code === 'INVALID_URL') {
+        setFieldError('INVALID_URL');
+        input.current?.focus();
+        return;
+      }
       const only = outcome.started[0];
       // One book to look at first: open it
       if (!outcome.target && links.length === 1 && only) {
-        void navigate(`/books/${only.id}`);
+        void navigate(`/books/${only.id}`, { state: { from: '/' } });
         return;
       }
       setResult(outcome);
@@ -82,7 +94,7 @@ export function Send({ initialLink = '' }: { initialLink?: string }) {
     onSuccess: ({ book }, duplicate) => {
       void refresh();
       if (!result?.target && result?.duplicates.length === 1 && result.started.length === 0) {
-        void navigate(`/books/${book.id}`);
+        void navigate(`/books/${book.id}`, { state: { from: '/' } });
         return;
       }
       setResult((current) =>
@@ -98,14 +110,16 @@ export function Send({ initialLink = '' }: { initialLink?: string }) {
     mutationFn: ({ book, target }: { book: Book; target?: Target }) => resendBook(book.id, target),
     onSuccess: () => void refresh(),
   });
-  const downloadOnly = useMutation({
-    mutationFn: () => updateMe({ download_only: true }),
-    onSuccess: ({ user }) => setUser(user),
-  });
+
 
   const go = (target?: Target) => {
-    const all = extractLinks(url);
+    const { links: all, error } = checkLinks(url);
     if (all.length === 0) return;
+    if (error) {
+      setFieldError(error);
+      input.current?.focus();
+      return;
+    }
     setResult(null);
     const links = all.slice(0, MAX_LINKS);
     start.mutate({ links, target, dropped: all.length - links.length });
@@ -118,77 +132,69 @@ export function Send({ initialLink = '' }: { initialLink?: string }) {
   const books = recent.data?.books ?? [];
   const failures = result?.failures ?? [];
   const singleFailure = failures.length === 1 && (result?.started.length ?? 0) + (result?.duplicates.length ?? 0) === 0;
-  const showSetup = me && !hasKindle && !me.download_only;
+  const showSetup = me && !hasKindle;
+  // Only the button that was pressed says it's working: "Preview first" must never look like a send
+  const pending = start.isPending ? (start.variables?.target ?? 'preview') : null;
+  const primaryBusy = pending !== null && (hasKindle ? pending === 'kindle' : true);
+  const previewBusy = hasKindle && pending === 'preview';
 
   return (
     <div className="g1-container">
       <PageHead eyebrow={t('send.eyebrow')} title={t('send.title')} lead={hasKindle ? t('send.lead') : t('send.leadNoKindle')} />
 
+      {/* A hint, not a choice: without an address every book is simply downloaded */}
       {showSetup && (
-        <div className="g1-card mb-6">
-          <h2 className="g1-card__title m-0">{t('send.setupTitle')}</h2>
-          <p className="g1-card__text m-0">{t('send.setupText')}</p>
-          <div className="g1-card__foot flex flex-wrap gap-2">
-            <Link to="/setup" className="g1-btn g1-btn--primary">
-              {t('send.setupAction')} <IconArrowRight className="g1-icon g1-arrow" aria-hidden />
-            </Link>
-            <button type="button" className="g1-btn g1-btn--ghost" disabled={downloadOnly.isPending} onClick={() => downloadOnly.mutate()}>
-              {t('send.noKindleAction')}
-            </button>
-          </div>
-          <ErrorCallout code={errorCode(downloadOnly.error)} />
-        </div>
-      )}
-
-      {hasKindle && !me?.setup_verified && (
-        <div className="mb-5">
-          <Callout tone="info">
-            {t('send.unverified')}{' '}
+        <div className="mb-6">
+          <Callout tone="info" title={t('send.setupTitle')}>
+            {t('send.setupText')}{' '}
             <Link className="g1-link" to="/setup">
-              {t('send.finishSetup')}
+              {t('send.setupAction')}
             </Link>
           </Callout>
         </div>
       )}
 
-      <form onSubmit={submit} className="g1-stack">
-        <div>
-          <label className="g1-label" htmlFor="send-url">
-            {t('send.label')}
-          </label>
-          <div className="flex gap-2">
-            <input
-              id="send-url"
-              ref={input}
-              className="g1-input min-w-0 flex-1"
-              type="text"
-              inputMode="url"
-              autoComplete="off"
-              spellCheck={false}
-              aria-describedby="send-url-hint"
-              placeholder={t('send.placeholder')}
-              value={url}
-              onChange={(event) => setUrl(event.target.value)}
-              required
-            />
-            <PasteButton onPaste={setUrl} />
-          </div>
-          <span id="send-url-hint" className="mt-1 block text-sm text-muted">
-            {t('send.hint', { n: MAX_LINKS })}
-          </span>
+      {hasKindle && !me?.setup_verified && (
+        <div className="mb-5">
+          <UnconfirmedCallout />
         </div>
+      )}
+
+      <form onSubmit={submit} className="g1-stack">
+        <LinkField
+          id="send-url"
+          inputRef={input}
+          label={t('send.label')}
+          placeholder={t('send.placeholder')}
+          value={url}
+          onChange={edit}
+          hint={t('send.hint', { n: MAX_LINKS })}
+          error={fieldError}
+        />
         <div className="flex flex-wrap gap-3">
-          <button ref={primary} type="submit" className="g1-btn g1-btn--primary" disabled={!url.trim() || start.isPending}>
+          <button
+            ref={primary}
+            type="submit"
+            className="g1-btn g1-btn--primary"
+            disabled={!url.trim() || start.isPending}
+            aria-busy={primaryBusy || undefined}
+          >
             {hasKindle && <IconSend className="g1-icon" aria-hidden />}
-            {start.isPending
+            {primaryBusy
               ? t('send.making')
               : hasKindle
                 ? t(pocketbook ? 'send.sendToPocketbook' : 'send.sendToKindle')
                 : t('send.make')}
           </button>
           {hasKindle && (
-            <button type="button" className="g1-btn" disabled={!url.trim() || start.isPending} onClick={() => go(undefined)}>
-              {t('send.previewFirst')}
+            <button
+              type="button"
+              className="g1-btn"
+              disabled={!url.trim() || start.isPending}
+              aria-busy={previewBusy || undefined}
+              onClick={() => go(undefined)}
+            >
+              {previewBusy ? t('send.previewing') : t('send.previewFirst')}
             </button>
           )}
         </div>
@@ -212,7 +218,7 @@ export function Send({ initialLink = '' }: { initialLink?: string }) {
             {t('send.duplicateText')}
             <div className="mt-3 flex flex-wrap gap-2">
               {duplicate.book.can_download && (
-                <Link className="g1-btn g1-btn--sm" to={`/books/${duplicate.book.id}`}>
+                <Link className="g1-btn g1-btn--sm" to={`/books/${duplicate.book.id}`} state={{ from: '/' }}>
                   {t('send.openIt')}
                 </Link>
               )}

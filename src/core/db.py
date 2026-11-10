@@ -58,6 +58,9 @@ class Article(Base):
     status = Column(String)
     error = Column(String)
     paywalled = Column(Integer)  # 1: only the free part of a paywalled post is in the EPUB; NULL: unknown (old rows)
+    # Where the book went, comma-separated targets (e.g. 'kindle' or 'kindle,telegram'), added up over resends.
+    # NULL: nowhere yet, or a row from before this column (then status says whether it was sent)
+    delivered = Column(String)
 
 
 class User(Base):
@@ -163,13 +166,23 @@ def update_user(user_id: int, **fields) -> User | None:
         return user
 
 
-def delete_user_data(user_id: int) -> None:
-    """
-    Remove the user, their history and the EPUB files nobody else's history points to.
+def _remove_files(session, paths: set[str]) -> None:
+    """Delete the EPUBs at `paths` that no remaining history row points to.
 
     Every conversion gets its own directory, so a path is shared only by rows written before that
     (the path used to be derived from the title alone).
     """
+    shared = {path for (path,) in session.query(Article.epub_path).filter(Article.epub_path.in_(paths))}
+    for path in paths - shared:
+        try:
+            os.remove(path)
+            os.rmdir(os.path.dirname(path))  # the book's own directory; left alone unless empty
+        except OSError:
+            pass
+
+
+def delete_user_data(user_id: int) -> None:
+    """Remove the user, their history and the EPUB files nobody else's history points to."""
     with Session() as session:
         articles = session.query(Article).filter_by(user_id=user_id).all()
         paths = {a.epub_path for a in articles if a.epub_path}
@@ -180,13 +193,24 @@ def delete_user_data(user_id: int) -> None:
         if user:
             session.delete(user)
         session.commit()
-        shared = {path for (path,) in session.query(Article.epub_path).filter(Article.epub_path.in_(paths))}
-    for path in paths - shared:
-        try:
-            os.remove(path)
-            os.rmdir(os.path.dirname(path))  # the book's own directory; left alone unless empty
-        except OSError:
-            pass
+        _remove_files(session, paths)
+
+
+def delete_article(article_id: int) -> None:
+    """Remove one history row and its EPUB, unless another row still points to the file."""
+    with Session() as session:
+        article = session.get(Article, article_id)
+        if article is None:
+            return
+        path = article.epub_path
+        session.delete(article)
+        session.commit()
+        if path:
+            _remove_files(session, {path})
+
+
+def delivered_targets(article: Article) -> set[str]:
+    return {t for t in (article.delivered or '').split(',') if t}
 
 
 def create_article(user_id: int, url: str) -> Article:
@@ -225,10 +249,39 @@ def recent_delivery(user_id: int, url: str, days: int = 30) -> Article | None:
                 .first())
 
 
-def history(user_id: int, offset: int = 0, limit: int = 5) -> tuple[list[Article], int]:
-    """A page of the user's articles, newest first, plus the total count."""
+# History filters: what a row's status and delivery say about it
+SHOWS = ('kindle', 'not_sent', 'failed', 'paywalled')
+
+
+def history(user_id: int, offset: int = 0, limit: int = 5, *, search: str = '',
+            show: str | None = None) -> tuple[list[Article], int]:
+    """A page of the user's articles, newest first, plus the total count of matching ones.
+
+    `search` looks in titles and links; `show` keeps one kind of row (see SHOWS).
+    """
     with Session() as session:
         query = session.query(Article).filter(Article.user_id == user_id)
+        words = search.strip()
+        if words:
+            pattern = '%' + words.replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_') + '%'
+            query = query.filter(or_(Article.title.ilike(pattern, escape='\\'),
+                                     Article.article_url.ilike(pattern, escape='\\')))
+        if show == 'kindle':
+            query = query.filter(Article.delivered.like('%kindle%'))
+        elif show == 'not_sent':
+            query = query.filter(Article.status == READY)
+        elif show == 'failed':  # PROCESSING rows that aren't running were cut off by a restart
+            query = query.filter(Article.status.in_((FAILED, PROCESSING)))
+        elif show == 'paywalled':
+            query = query.filter(or_(Article.paywalled == 1, Article.status == PREVIEW))
         total = query.count()
         articles = query.order_by(Article.timestamp.desc(), Article.id.desc()).offset(offset).limit(limit).all()
         return articles, total
+
+
+def kindle_count(user_id: int) -> int:
+    """How many books went to the user's Kindle (as far as the history knows)."""
+    with Session() as session:
+        return (session.query(Article)
+                .filter(Article.user_id == user_id, Article.delivered.like('%kindle%'))
+                .count())

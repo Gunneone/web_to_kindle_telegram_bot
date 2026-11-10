@@ -6,6 +6,18 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["--prefix", "frontend", "run", "dev"],
       "port": 5173
+    },
+    {
+      "name": "eselsohr-api-8001",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": ["-c", "cd src && exec env DATABASE_URL=sqlite:////private/tmp/claude-501/-Users-gunneone-Projects-web-to-kindle-telegram-bot/b5e9293f-7c23-4f8a-8791-e49e3d3d1efc/scratchpad/dev.db PUBLIC_URL=http://localhost:5174 WEB_PORT=8001 ../.venv/bin/python web_server.py"],
+      "port": 8001
+    },
+    {
+      "name": "eselsohr-frontend-5174",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": ["-c", "exec env API_URL=http://127.0.0.1:8001 PORT=5174 npm --prefix frontend run dev"],
+      "port": 5174
     }
   ]
 }

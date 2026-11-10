@@ -9,6 +9,7 @@ import logging
 import secrets
 import time
 from dataclasses import dataclass
+from urllib.parse import quote
 
 from email_sender import send_message
 
@@ -94,9 +95,14 @@ class CodeStore:
             self._drop(email)
 
 
-def send_code(settings: Settings, email: str, code: str, token: str, lang: str) -> None:
-    """Mail the code (blocking: call it in a thread). Raises email_sender.EmailError."""
+def send_code(settings: Settings, email: str, code: str, token: str, lang: str, next_path: str = '/') -> None:
+    """
+    Mail the code (blocking: call it in a thread). The link signs in and then opens `next_path`, a path on
+    this site (checked by the caller). Raises email_sender.EmailError.
+    """
     link = f'{settings.public_url}/signin/verify?token={token}'
+    if next_path != '/':
+        link += f'&next={quote(next_path, safe="/")}'
     if settings.mail == 'log':
         logger.warning(f'Sign-in code for {email}: {code}  (link: {link})')
         return

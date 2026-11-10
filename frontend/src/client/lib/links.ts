@@ -31,6 +31,19 @@ export function extractLinks(text: string): string[] {
   return [...new Set(found)];
 }
 
+/** A host name with a dot and a top-level domain that starts with a letter (example.com, bücher.de, xn--p1ai). */
+const HOST = /^[\p{L}\p{N}.-]+\.\p{L}[\p{L}\p{N}-]+(:\d+)?$/u;
+
+/**
+ * Whether an entry from `extractLinks` could be a web address, so a sentence or a typo is caught in the
+ * field instead of after a trip to the server. Lenient on purpose: `example.com/post` passes.
+ */
+export function looksLikeLink(entry: string): boolean {
+  if (/\s/.test(entry)) return false;
+  const host = entry.replace(/^https?:\/\//i, '').split(/[/?#]/)[0].replace(/^[^@]*@/, '');
+  return HOST.test(host);
+}
+
 /**
  * A link handed to the start page by the bookmarklet (`?url=`) or the phone's share sheet, which
  * sends `title`, `text` and `url`; many apps put the link into `text`.

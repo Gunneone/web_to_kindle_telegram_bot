@@ -238,21 +238,34 @@
   outline-offset: 2px;
 }
 
-/* Choices in the setup ("What do you read on?"): whole cards are buttons. */
-.esel-choice {
-  width: 100%;
-  text-align: left;
-  cursor: pointer;
-  font: inherit;
-  color: inherit;
-  transition: border-color var(--g1-dur-fast) var(--g1-ease);
-}
-.esel-choice:hover,
-.esel-choice:focus-visible {
-  --g1-edge: var(--g1-primary);
-}
-
 /* The bookmarklet: a button that is meant to be dragged, not clicked. */
 .esel-bookmarklet {
   cursor: grab;
+}
+
+/*
+ * gunne.css dims a disabled button to half opacity. On a dark page that leaves the blue main action
+ * looking merely quiet rather than off, so a disabled primary turns flat and grey instead, in both
+ * themes. A button that is disabled because it is working (aria-busy) keeps its color.
+ */
+.g1-btn--primary:disabled:not([aria-busy='true']),
+.g1-btn--primary[aria-disabled='true']:not([aria-busy='true']) {
+  --g1-fill: var(--g1-surface-2);
+  --g1-edge: var(--g1-border);
+  color: var(--g1-text-subtle);
+  opacity: 1;
+}
+.g1-btn[aria-busy='true'] {
+  opacity: 1;
+  cursor: progress;
+}
+
+/* A field with a problem keeps its red edge, also while it has the focus. */
+.g1-input[aria-invalid='true'],
+.g1-input[aria-invalid='true']:hover {
+  --g1-edge: var(--g1-danger);
+}
+.g1-input[aria-invalid='true']:focus-visible {
+  --g1-edge: var(--g1-danger);
+  box-shadow: inset 0 0 0 1px var(--g1-danger);
 }

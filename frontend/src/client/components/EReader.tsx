@@ -27,7 +27,12 @@ export function EReader({ src, title, children }: { src?: string; title: string;
   // The frame is same-origin (and runs no scripts of its own), so the footer can follow its scrolling
   useEffect(() => {
     const win = loaded ? frame.current?.contentWindow : null;
-    const doc = win?.document;
+    let doc: Document | undefined;
+    try {
+      doc = win?.document;
+    } catch {
+      return; // the preview failed and the browser put its own (cross-origin) error page in the frame
+    }
     if (!win || !doc?.body) return;
     const words = (doc.body.innerText || '').split(/\s+/).filter(Boolean).length;
     const update = () => {

@@ -4,33 +4,45 @@ import { useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { ErrorCallout } from '../components/Callout';
 import { EReader } from '../components/EReader';
-import { PasteButton } from '../components/PasteButton';
+import { checkLinks, LinkField } from '../components/LinkField';
 import { Eyebrow, PageHead, SectionHead } from '../components/Text';
 import { useI18n } from '../i18n';
 import { createBook, errorCode } from '../lib/api';
-import { extractLinks } from '../lib/links';
 
 const STEPS = ['paste', 'bind', 'read'] as const;
 const QUESTIONS = ['free', 'devices', 'sender', 'paywall', 'data'] as const;
 
 /**
  * What Eselsohr is, for someone who isn't signed in: try it with a link right here (the book is
- * built under a guest account, to look at and download), or flip through the sample book first.
+ * built under a guest account, to look at; downloading needs a sign-in), or flip through the sample book first.
  */
 export function Landing({ initialLink = '' }: { initialLink?: string }) {
   const { t, lang } = useI18n();
   const navigate = useNavigate();
   const [url, setUrl] = useState(initialLink);
+  // What's wrong with the link itself, shown at the field until it changes
+  const [fieldError, setFieldError] = useState<string | null>(null);
   const create = useMutation({
     mutationFn: (link: string) => createBook(link),
     onSuccess: ({ book }) => void navigate(`/books/${book.id}`),
   });
+  const edit = (value: string) => {
+    setUrl(value);
+    setFieldError(null);
+    create.reset();
+  };
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const [link] = extractLinks(url);
-    if (link) create.mutate(link);
+    const { links, error } = checkLinks(url);
+    if (error) {
+      setFieldError(error);
+      return;
+    }
+    if (links[0]) create.mutate(links[0]);
   };
+  const serverError = errorCode(create.error);
+  const linkError = fieldError ?? (serverError === 'INVALID_URL' ? serverError : null);
   // Signing in keeps a link that is already filled in
   const signIn = url.trim() ? `/signin?next=${encodeURIComponent(`/?url=${encodeURIComponent(url.trim())}`)}` : '/signin';
 
@@ -40,28 +52,21 @@ export function Landing({ initialLink = '' }: { initialLink?: string }) {
         <div>
           <PageHead eyebrow={t('home.eyebrow')} title={t('home.title')} scribble={t('home.scribble')} lead={t('home.lead')} />
           <form onSubmit={submit} className="g1-stack">
-            <div>
-              <label className="g1-label" htmlFor="try-url">
-                {t('home.try.label')}
-              </label>
-              <div className="flex gap-2">
-                <input
-                  id="try-url"
-                  className="g1-input min-w-0 flex-1"
-                  type="text"
-                  inputMode="url"
-                  autoComplete="off"
-                  spellCheck={false}
-                  placeholder={t('home.try.placeholder')}
-                  value={url}
-                  onChange={(event) => setUrl(event.target.value)}
-                  required
-                />
-                <PasteButton onPaste={setUrl} />
-              </div>
-            </div>
+            <LinkField
+              id="try-url"
+              label={t('home.try.label')}
+              placeholder={t('home.try.placeholder')}
+              value={url}
+              onChange={edit}
+              error={linkError}
+            />
             <div className="flex flex-wrap gap-3">
-              <button type="submit" className="g1-btn g1-btn--primary g1-btn--lg" disabled={!url.trim() || create.isPending}>
+              <button
+                type="submit"
+                className="g1-btn g1-btn--primary g1-btn--lg"
+                disabled={!url.trim() || create.isPending}
+                aria-busy={create.isPending || undefined}
+              >
                 {create.isPending ? t('home.try.making') : t('home.try.submit')}
                 <IconArrowRight className="g1-icon g1-arrow" aria-hidden />
               </button>
@@ -70,7 +75,7 @@ export function Landing({ initialLink = '' }: { initialLink?: string }) {
               </Link>
             </div>
             <p className="m-0 text-sm text-muted">{t('home.try.note')}</p>
-            <ErrorCallout code={errorCode(create.error)} />
+            <ErrorCallout code={linkError ? null : serverError} />
           </form>
         </div>
         <div className="flex flex-col items-center gap-3">

@@ -58,8 +58,8 @@ def me_payload(user: db.User, request: Request) -> dict:
         'providers': sorted({i.provider for i in accounts.identities(user.user_id)}),
         # When the last test book went out, so the setup can ask "did it arrive?" after a reload
         'test_sent_at': jobs.iso(user.test_book_sent_at),
-        # The person said they read without a Kindle (EPUB files only), so don't keep asking for an address
-        'download_only': user.chose_chat_only,
+        # How many books went to the Kindle: the first few get a "not on your Kindle?" hint
+        'kindle_books': db.kindle_count(user.user_id),
     }
 
 
@@ -75,7 +75,6 @@ class MePatch(BaseModel):
     image_links: bool | None = None
     language: str | None = None
     amazon_store: str | None = None  # '' goes back to guessing
-    download_only: bool | None = None  # True: "I read without a Kindle"; False: undo that
 
 
 @router.patch('/me')
@@ -85,16 +84,11 @@ async def patch_me(body: MePatch, request: Request, user: db.User = Depends(requ
         address = kindle.normalize_email(body.kindle_email)
         if address and not kindle.is_device_email(address):
             raise ApiError(400, 'INVALID_KINDLE_EMAIL')
-        address = address or None
+        address = address or None  # '': remove the address (only ever on an explicit "remove")
         if address != user.kindle_email:
             fields.update(kindle_email=address, setup_verified=0, test_book_sent_at=None)
             if address:  # like the bot: an address means "deliver to my Kindle", unless both were chosen
                 fields['delivery_mode'] = db.BOTH if user.delivery_mode == db.BOTH else db.KINDLE
-    if body.download_only is not None:
-        if body.download_only:
-            fields['delivery_mode'] = db.TELEGRAM
-        elif user.delivery_mode == db.TELEGRAM:
-            fields['delivery_mode'] = db.KINDLE if (fields.get('kindle_email') or user.kindle_email) else None
     if body.image_links is not None:
         fields['preserve_image_links'] = int(body.image_links)
     if body.amazon_store is not None:
@@ -147,9 +141,17 @@ async def setup_verified(request: Request, user: db.User = Depends(require_user)
     return {'user': me_payload(user, request)}
 
 
+MAX_SEARCH_LENGTH = 200
+
+
 @router.get('/books')
-async def list_books(offset: int = 0, limit: int = PAGE_SIZE, user: db.User = Depends(require_user)):
-    articles, total = db.history(user.user_id, max(0, offset), min(max(1, limit), 50))
+async def list_books(offset: int = 0, limit: int = PAGE_SIZE, q: str = '', show: str = '',
+                     user: db.User = Depends(require_user)):
+    """A page of the history; `q` searches titles and links, `show` is one of db.SHOWS (or empty: all)."""
+    if show and show not in db.SHOWS:
+        raise ApiError(400, 'INVALID_REQUEST')
+    articles, total = db.history(user.user_id, max(0, offset), min(max(1, limit), 50),
+                                 search=q[:MAX_SEARCH_LENGTH], show=show or None)
     return {'books': [jobs.serialize(a) for a in articles], 'total': total}
 
 
@@ -163,6 +165,17 @@ def _owned(article_id: int, user: db.User) -> db.Article:
 @router.get('/books/{article_id}')
 async def get_book(article_id: int, user: db.User = Depends(book_owner)):
     return {'book': jobs.serialize(_owned(article_id, user))}
+
+
+@router.delete('/books/{article_id}', status_code=204)
+async def delete_book(article_id: int, user: db.User = Depends(book_owner)):
+    """Remove one book from the history, with its EPUB."""
+    article = _owned(article_id, user)
+    if jobs.is_running(article.id):
+        raise ApiError(409, 'ALREADY_RUNNING')
+    jobs.LIVE.pop(article.id, None)
+    db.delete_article(article.id)
+    return Response(status_code=204)
 
 
 class NewBook(BaseModel):
@@ -247,7 +260,9 @@ def _filename(title: str | None) -> str:
 def _built(article_id: int, user: db.User) -> db.Article:
     """The user's book with its EPUB on disk."""
     article = _owned(article_id, user)
-    if article.status == db.PROCESSING or not article.epub_path:  # nothing built (yet)
+    # Nothing built yet. The path is only stored once the file is complete, and a book that has one is never
+    # rebuilt (a resend reuses it), so it can be served while it is being re-sent, and after a restart
+    if not article.epub_path:
         raise ApiError(404, 'NOT_FOUND')
     if not os.path.exists(article.epub_path):
         raise ApiError(410, 'FILE_GONE')  # the disk monitor cleans up old books
@@ -292,7 +307,8 @@ async def book_feedback(article_id: int, body: Feedback, user: db.User = Depends
 
 
 @router.get('/books/{article_id}/epub')
-async def download_book(article_id: int, user: db.User = Depends(book_owner)):
+async def download_book(article_id: int, user: db.User = Depends(require_user)):
+    """The EPUB file. Only for signed-in accounts: a visitor may look at the preview, then sign in to keep it."""
     article = _built(article_id, user)
     return FileResponse(article.epub_path, media_type='application/epub+zip', filename=_filename(article.title),
                         headers={'Cache-Control': 'private, no-store'})

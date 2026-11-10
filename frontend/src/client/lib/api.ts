@@ -1,5 +1,8 @@
 export type Provider = 'telegram' | 'google' | 'email';
-export type Target = 'kindle' | 'download';
+/** Where the web delivers; without a target a book is only built, to look at and download. */
+export type Target = 'kindle';
+/** Where a book went: the Kindle, or (from the bot) a file in the Telegram chat */
+export type Delivered = 'kindle' | 'telegram';
 export type BookStatus = 'processing' | 'ready' | 'sent' | 'preview' | 'failed' | 'interrupted';
 export type Stage = 'received' | 'queued' | 'fetching' | 'building' | 'sending';
 export type Failure = 'blocked' | 'extract' | 'fetch' | 'email' | 'unknown';
@@ -24,8 +27,8 @@ export interface Me {
   providers: Provider[];
   /** When the last test book went out (ISO), so the setup can ask whether it arrived after a reload */
   test_sent_at: string | null;
-  /** The person reads without a Kindle and only downloads books */
-  download_only: boolean;
+  /** How many books went to the Kindle; the first few point to help in case one never arrives */
+  kindle_books: number;
 }
 
 export interface SessionInfo {
@@ -42,7 +45,11 @@ export interface Book {
   title: string;
   status: BookStatus;
   stage: Stage | null;
-  delivered: Target[];
+  /**
+   * Where it went. Empty for a book that was only built, and for old rows that don't record it
+   * (then status 'sent' or 'preview' says it went somewhere)
+   */
+  delivered: Delivered[];
   failure: Failure | null;
   detail: string | null;
   created_at: string | null;
@@ -112,7 +119,6 @@ export const updateMe = (body: {
   image_links?: boolean;
   language?: string;
   amazon_store?: string;
-  download_only?: boolean;
 }) =>
   request<{ user: Me }>('PATCH', '/api/me', body);
 export const deleteMe = () => request<void>('DELETE', '/api/me');
@@ -120,14 +126,23 @@ export const sendTestBook = () => request<void>('POST', '/api/me/test-book');
 export const confirmSetup = () => request<{ user: Me }>('POST', '/api/me/setup-verified');
 export const signOut = () => request<void>('POST', '/api/auth/signout');
 
-export const startEmailSignIn = (email: string, lang: string) =>
-  request<void>('POST', '/api/auth/email/start', { email, lang });
+/** `next`: where the link in the mail leads after signing in. */
+export const startEmailSignIn = (email: string, lang: string, next = '/') =>
+  request<void>('POST', '/api/auth/email/start', { email, lang, next });
 export const verifyEmailCode = (email: string, code: string) =>
   request<{ user: Me }>('POST', '/api/auth/email/verify', { email, code });
 export const verifyEmailToken = (token: string) => request<{ user: Me }>('POST', '/api/auth/email/verify', { token });
 
-export const listBooks = (offset = 0, limit = 20) =>
-  request<{ books: Book[]; total: number }>('GET', `/api/books?offset=${offset}&limit=${limit}`);
+export const HISTORY_SHOWS = ['kindle', 'not_sent', 'failed', 'paywalled'] as const;
+export type HistoryShow = (typeof HISTORY_SHOWS)[number];
+
+export const listBooks = (offset = 0, limit = 20, search = '', show: HistoryShow | '' = '') => {
+  const query = new URLSearchParams({ offset: String(offset), limit: String(limit) });
+  if (search) query.set('q', search);
+  if (show) query.set('show', show);
+  return request<{ books: Book[]; total: number }>('GET', `/api/books?${query}`);
+};
+export const deleteBook = (id: number) => request<void>('DELETE', `/api/books/${id}`);
 export const getBook = (id: number) => request<{ book: Book }>('GET', `/api/books/${id}`);
 /**
  * Makes a book. Without a target it is only built, so it can be looked at first; that also works

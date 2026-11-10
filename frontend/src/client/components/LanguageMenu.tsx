@@ -32,7 +32,7 @@ export function LanguageMenu() {
   };
 
   const choose = (code: Lang) => {
-    if (code !== lang) setLang(code);
+    if (code !== lang) setLang(code).catch(() => undefined); // the page switches either way
     close();
   };
 

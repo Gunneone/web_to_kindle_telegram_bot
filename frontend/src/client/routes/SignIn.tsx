@@ -23,9 +23,11 @@ export function SignIn() {
   }, [me, next, navigate]);
 
   const providers = session.data?.providers;
+  // Only name the ways in that are switched on
+  const lead = providers?.telegram ? (providers.google ? 'all' : 'telegram') : providers?.google ? 'google' : 'email';
   return (
     <div className="g1-container g1-container--prose">
-      <PageHead eyebrow={t('signin.eyebrow')} title={t('signin.title')} lead={t('signin.lead')} />
+      <PageHead eyebrow={t('signin.eyebrow')} title={t('signin.title')} lead={session.isPending ? undefined : t(`signin.lead.${lead}`)} />
       <div className="g1-stack">
         <ErrorCallout code={params.get('error')} />
         {(providers?.telegram || providers?.google) && (
@@ -45,7 +47,7 @@ export function SignIn() {
           </div>
         )}
         {(providers?.telegram || providers?.google) && <p className="g1-eyebrow m-0">{t('common.or')}</p>}
-        <EmailSignIn onDone={() => void reset()} />
+        <EmailSignIn next={next} onDone={() => void reset()} />
       </div>
     </div>
   );

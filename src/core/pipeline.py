@@ -148,8 +148,11 @@ async def run(user: db.User, url: str, frontend: Frontend, *, targets: set[str] 
     article = db.get_article(article_id) if article_id else None
     if article is None:
         article = db.create_article(user.user_id, url)
-    reuse = (article_id is not None and article.status in (*db.DELIVERED, db.READY, None)
-             and bool(article.epub_path) and os.path.exists(article.epub_path))
+    # A book that was built goes out again as it is: also after a failed or interrupted delivery, so a
+    # retry doesn't depend on the site still serving the page. epub_path is only stored once the file is
+    # complete, so whatever it points to is a whole book
+    reuse = article_id is not None and bool(article.epub_path) and os.path.exists(article.epub_path)
+    unsettled = article.status in (db.FAILED, db.PROCESSING)  # a failed or interrupted earlier attempt
 
     await frontend.stage(Stage.RECEIVED, article)
     user_slots = USER_SLOTS[user.user_id]
@@ -197,18 +200,19 @@ async def run(user: db.User, url: str, frontend: Frontend, *, targets: set[str] 
                 logger.error(f"Could not email {url} to user {user.user_id}: {e}")
             else:
                 logger.exception(f"Error processing URL {url}")
-            if not reuse:
+            if not reuse or unsettled:  # a book that went out before stays sent
                 db.update_article(article.id, status=db.FAILED, error=str(e)[:500])
             return Outcome(article.id, book, delivered, failure=failure, error=e, file_too_big=too_big)
 
         if delivered:
             db.update_article(article.id, status=db.PREVIEW if book.is_preview else db.SENT, error=None,
-                              timestamp=db.utcnow())
+                              timestamp=db.utcnow(),
+                              delivered=','.join(sorted(db.delivered_targets(article) | delivered)))
             if db.KINDLE in delivered:
                 db.update_user(user.user_id, last_book_received_date=date.today().isoformat())
             logger.info(f"Delivered '{book.title}' to user {user.user_id} via {sorted(delivered)}")
         elif not targets:
-            if not reuse:
+            if not reuse or unsettled:
                 db.update_article(article.id, status=db.READY, error=None)
             logger.info(f"Built '{book.title}' for user {user.user_id}, not delivered yet")
         elif not reuse:
