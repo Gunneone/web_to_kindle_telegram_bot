@@ -11,6 +11,8 @@ is one way to reach it, so the pipeline, history and settings never care how som
 - Connecting Telegram to a web account merges the web account into the Telegram one.
 """
 
+from datetime import timedelta
+
 from . import db
 
 TELEGRAM = 'telegram'
@@ -118,6 +120,30 @@ def merge(src_id: int, dst_id: int) -> None:
         session.query(db.Article).filter_by(user_id=src_id).update({'user_id': dst_id})
         session.query(db.Identity).filter_by(user_id=src_id).update({'user_id': dst_id})
         session.commit()
+
+
+GUEST_DAYS = 7
+
+
+def new_guest() -> db.User:
+    """An account for someone trying the web app without signing in: no identities, only books."""
+    prune_guests()
+    with db.Session() as session:
+        user = db.User(user_id=_new_web_id(), preserve_image_links=0, setup_verified=0, guest_since=db.utcnow())
+        session.add(user)
+        session.commit()
+        return user
+
+
+def prune_guests(days: int = GUEST_DAYS) -> int:
+    """Remove guests (and their books) nobody signed in for within `days` days; returns how many."""
+    cutoff = db.utcnow() - timedelta(days=days)
+    with db.Session() as session:
+        stale = [uid for (uid,) in session.query(db.User.user_id).filter(db.User.guest_since.isnot(None),
+                                                                         db.User.guest_since < cutoff)]
+    for user_id in stale:
+        db.delete_user_data(user_id)
+    return len(stale)
 
 
 def _new_web_id() -> int:

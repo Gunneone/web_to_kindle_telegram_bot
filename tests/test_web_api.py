@@ -12,6 +12,7 @@ import tempfile
 import time
 import unittest
 import zipfile
+from datetime import timedelta
 from pathlib import Path
 from unittest.mock import patch
 from urllib.parse import parse_qs, urlparse
@@ -167,7 +168,8 @@ class SessionTest(ApiCase):
     def test_the_account_endpoints_need_a_sign_in(self):
         c = self.client()
         for method, path in (('get', '/api/books'), ('patch', '/api/me'), ('delete', '/api/me'),
-                             ('post', '/api/books'), ('get', '/api/books/1/epub')):
+                             ('get', '/api/books/1'), ('get', '/api/books/1/epub'), ('post', '/api/books/1/send'),
+                             ('post', '/api/me/test-book')):
             self.assertEqual(getattr(c, method)(path).status_code, 401, path)
 
     def test_email_code_sign_in_and_out(self):
@@ -318,6 +320,32 @@ class AccountTest(ApiCase):
             c.post('/api/me/test-book')
         self.assertEqual(c.post('/api/me/test-book').status_code, 429)
 
+    def test_the_test_book_is_remembered_until_the_address_changes(self):
+        c = self.client()
+        self.sign_in(c)
+        c.patch('/api/me', json={'kindle_email': 'ann@kindle.com'})
+        self.assertIsNone(c.get('/api/session').json()['user']['test_sent_at'])
+        c.post('/api/me/test-book')
+        self.assertTrue(c.get('/api/session').json()['user']['test_sent_at'].endswith('Z'))
+        c.patch('/api/me', json={'kindle_email': 'ann@kindle.com'})  # the same address keeps it
+        self.assertIsNotNone(c.get('/api/session').json()['user']['test_sent_at'])
+        self.assertIsNone(c.patch('/api/me', json={'kindle_email': 'new@kindle.com'}).json()['user']['test_sent_at'])
+
+    def test_reading_without_a_kindle(self):
+        c = self.client()
+        self.sign_in(c)
+        uid = -1  # the first web account
+        self.assertFalse(c.get('/api/session').json()['user']['download_only'])
+        self.assertTrue(c.patch('/api/me', json={'download_only': True}).json()['user']['download_only'])
+        self.assertEqual(db.get_user(uid).delivery_mode, db.TELEGRAM)  # the bot sends files to the chat too
+        # setting up a Kindle later means delivering to it, in the bot as well
+        user = c.patch('/api/me', json={'kindle_email': 'ann@kindle.com'}).json()['user']
+        self.assertFalse(user['download_only'])
+        self.assertEqual(db.get_user(uid).delivery_mode, db.KINDLE)
+        c.patch('/api/me', json={'download_only': True})
+        self.assertFalse(c.patch('/api/me', json={'download_only': False}).json()['user']['download_only'])
+        self.assertEqual(db.get_user(uid).delivery_mode, db.KINDLE)
+
     def test_deleting_the_account(self):
         c = self.client()
         self.sign_in(c)
@@ -460,6 +488,100 @@ class BookTest(ApiCase):
         first = c.get('/api/books?limit=20').json()
         second = c.get('/api/books?offset=20&limit=20').json()
         self.assertEqual((first['total'], len(first['books']), len(second['books'])), (25, 20, 5))
+
+
+class GuestTest(BookTest):
+    """Trying it without signing in: build, look, download; then sign in and keep the book."""
+
+    def try_book(self, c, url='https://e.com/post') -> dict:
+        r = c.post('/api/books', json={'url': url})
+        self.assertEqual(r.status_code, 202, r.text)
+        return self.wait_for(c, r.json()['book']['id'])
+
+    def test_a_visitor_can_make_look_at_and_download_a_book(self):
+        c = self.client()
+        book = self.try_book(c)
+        self.assertEqual((book['status'], book['can_download']), ('ready', True))
+        self.assertEqual(c.get(f"/api/books/{book['id']}/epub").status_code, 200)
+        self.assertIsNone(c.get('/api/session').json()['user'])  # still not signed in
+        self.assertEqual(c.get('/api/books').status_code, 401)  # no history, no settings
+        self.assertEqual(c.patch('/api/me', json={'kindle_email': 'x@kindle.com'}).status_code, 401)
+        self.assertEqual(self.mailed, [])
+
+    def test_a_visitor_cannot_deliver(self):
+        c = self.client()
+        r = c.post('/api/books', json={'url': 'https://e.com/post', 'target': 'kindle'})
+        self.assertEqual((r.status_code, r.json()['error']['code']), (401, 'UNAUTHENTICATED'))
+        book = self.try_book(c)
+        self.assertEqual(c.post(f"/api/books/{book['id']}/send", json={'target': 'kindle'}).status_code, 401)
+        self.assertEqual(c.post(f"/api/books/{book['id']}/feedback", json={'reasons': ['text']}).status_code, 401)
+
+    def test_a_failed_try_can_be_retried(self):
+        c = self.client()
+        self.scrape_error = BlockedError('refused')
+        book = self.try_book(c)
+        self.assertEqual(book['status'], 'failed')
+        self.scrape_error = None
+        self.assertEqual(c.post(f"/api/books/{book['id']}/send", json={}).status_code, 202)
+        self.assertEqual(self.wait_for(c, book['id'])['status'], 'ready')
+
+    def test_signing_in_keeps_the_books(self):
+        c = self.client()
+        book = self.try_book(c)
+        guest_id = db.get_article(book['id']).user_id
+        self.assertTrue(db.get_user(guest_id).is_guest)
+        self.sign_in(c)
+        listing = c.get('/api/books').json()
+        self.assertEqual([b['id'] for b in listing['books']], [book['id']])
+        self.assertIsNone(db.get_user(guest_id))
+        self.assertEqual(c.get(f"/api/books/{book['id']}/epub").status_code, 200)
+        # the guest is gone: signing out and back in doesn't bring a second copy
+        c.post('/api/auth/signout')
+        self.assertEqual(c.get(f"/api/books/{book['id']}").status_code, 401)
+
+    def test_signing_in_to_an_existing_account_adds_the_books(self):
+        existing = self.signed_in()
+        mine = existing.post('/api/books', json={'url': 'https://e.com/mine'}).json()['book']
+        visitor = self.client()
+        tried = self.try_book(visitor)
+        self.sign_in(visitor)  # the same address as the existing account
+        ids = {b['id'] for b in visitor.get('/api/books').json()['books']}
+        self.assertEqual(ids, {mine['id'], tried['id']})
+        self.assertEqual(visitor.get('/api/session').json()['user']['kindle_email'], 'ann@kindle.com')
+
+    def test_guest_books_are_private(self):
+        c = self.client()
+        book = self.try_book(c)
+        self.assertEqual(self.client().get(f"/api/books/{book['id']}").status_code, 401)
+        other = self.client()
+        self.sign_in(other, 'bob@example.com')
+        self.assertEqual(other.get(f"/api/books/{book['id']}").status_code, 404)
+        self.assertEqual(other.get(f"/api/books/{book['id']}/preview").status_code, 404)
+
+    def test_tries_are_limited_per_address(self):
+        c = self.client()
+        for i in range(5):
+            self.try_book(c, f'https://e.com/post-{i}')
+        c.cookies.clear()  # a new guest from the same address
+        r = c.post('/api/books', json={'url': 'https://e.com/another'})
+        self.assertEqual((r.status_code, r.json()['error']['code']), (429, 'RATE_LIMITED'))
+
+    def test_old_guests_are_removed(self):
+        c = self.client()
+        book = self.try_book(c)
+        guest_id = db.get_article(book['id']).user_id
+        self.assertEqual(accounts.prune_guests(), 0)
+        db.update_user(guest_id, guest_since=db.utcnow() - timedelta(days=accounts.GUEST_DAYS + 1))
+        self.assertEqual(accounts.prune_guests(), 1)
+        self.assertIsNone(db.get_user(guest_id))
+        self.assertIsNone(db.get_article(book['id']))
+        self.assertEqual(c.get(f"/api/books/{book['id']}").status_code, 401)
+
+    def test_a_guest_cookie_is_not_a_sign_in(self):
+        c = self.client()
+        self.try_book(c)
+        self.assertIsNone(c.get('/api/session').json()['user'])
+        self.assertEqual(c.post('/api/me/test-book').status_code, 401)
 
 
 class PreviewTest(BookTest):
@@ -695,6 +817,18 @@ class ClientFilesTest(ApiCase):
         r = c.get('/assets/app-abc.js')
         self.assertIn('immutable', r.headers['cache-control'])
         self.assertEqual(c.get('/favicon.svg').text, '<svg/>')
+
+    def test_the_sample_book_may_be_framed_by_the_app_only(self):
+        dist = make_dist()
+        (dist / 'sample').mkdir()
+        (dist / 'sample' / 'en.html').write_text('<!doctype html><p>sample</p>')
+        (dist / 'manifest.webmanifest').write_text('{}')
+        c = self.client(dist_dir=dist)
+        sample = c.get('/sample/en.html')
+        self.assertIn("frame-ancestors 'self'", sample.headers['content-security-policy'])
+        self.assertNotIn('script-src', sample.headers['content-security-policy'])
+        self.assertIn("frame-ancestors 'none'", c.get('/').headers['content-security-policy'])
+        self.assertEqual(c.get('/manifest.webmanifest').headers['content-type'], 'application/manifest+json')
 
     def test_nothing_outside_the_build_is_served(self):
         c = self.client()

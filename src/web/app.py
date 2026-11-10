@@ -5,6 +5,7 @@ The FastAPI app: the JSON API under /api and the built React client everywhere e
 import base64
 import hashlib
 import logging
+import mimetypes
 import re
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -15,7 +16,7 @@ from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.staticfiles import StaticFiles
 
-from core import db
+from core import accounts, db
 
 from . import config
 from .auth_email import CodeStore
@@ -30,6 +31,11 @@ logger = logging.getLogger(__name__)
 SESSION_COOKIE = 'eselsohr_session'
 SESSION_MAX_AGE = 90 * 24 * 3600
 UNSAFE_METHODS = {'POST', 'PUT', 'PATCH', 'DELETE'}
+# The sample book on the start page is framed like a real preview: it may only show inside Eselsohr
+# and load its own stylesheet
+SAMPLE_CSP = ("default-src 'none'; style-src 'self'; img-src 'self' data:; frame-ancestors 'self'; "
+              "base-uri 'none'; form-action 'none'")
+mimetypes.add_type('application/manifest+json', '.webmanifest')
 INLINE_SCRIPT = re.compile(r'<script(?![^>]*\bsrc=)[^>]*>(.*?)</script>', re.S | re.I)
 
 
@@ -56,6 +62,7 @@ def create_app(settings: config.Settings | None = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         db.init_db()
+        accounts.prune_guests()
         yield
 
     app = FastAPI(title='Eselsohr', docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
@@ -121,7 +128,10 @@ def create_app(settings: config.Settings | None = None) -> FastAPI:
                                      'or use the Vite dev server.', status_code=503)
         candidate = (dist_root / path).resolve()
         if path and candidate.is_file() and candidate.is_relative_to(dist_root) and candidate != dist_root / 'index.html':
-            return FileResponse(candidate, headers={'Cache-Control': 'public, max-age=3600'})
+            headers = {'Cache-Control': 'public, max-age=3600'}
+            if path.startswith('sample/') and path.endswith('.html'):
+                headers['Content-Security-Policy'] = SAMPLE_CSP
+            return FileResponse(candidate, headers=headers)
         return FileResponse(dist_root / 'index.html', headers={'Cache-Control': 'no-cache'})
 
     return app

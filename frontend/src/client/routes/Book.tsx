@@ -31,9 +31,9 @@ export function BookPage() {
   });
 
   const back = (
-    <Link className="g1-link inline-flex items-center gap-1 text-sm" to="/history">
+    <Link className="g1-link inline-flex items-center gap-1 text-sm" to={me ? '/history' : '/'}>
       <IconArrowLeft className="g1-icon" aria-hidden />
-      {t('book.allBooks')}
+      {me ? t('book.allBooks') : t('book.another')}
     </Link>
   );
 
@@ -42,12 +42,20 @@ export function BookPage() {
     return (
       <div className="g1-container g1-stack">
         {query.isPending ? <p className="g1-meta">{t('common.loading')}</p> : <ErrorCallout code={errorCode(query.error)} />}
+        {!query.isPending && !me && errorCode(query.error) === 'UNAUTHENTICATED' && (
+          <div>
+            <Link className="g1-btn g1-btn--primary" to={`/signin?next=${encodeURIComponent(`/books/${bookId}`)}`}>
+              {t('book.guestAction')}
+            </Link>
+          </div>
+        )}
         <div>{back}</div>
       </div>
     );
   }
 
   const hasKindle = Boolean(me?.kindle_email);
+  const guest = !me;
   const working = book.status === 'processing';
   // Sending a book that is already built: keep it on the screen while it goes out
   const delivering = working && (book.stage === 'sending' || (send.variables !== undefined && !send.isError));
@@ -143,18 +151,28 @@ export function BookPage() {
             )}
           </div>
 
-          {book.can_download && !hasKindle && (
+          {book.can_download && guest && (
+            <Callout tone="info" title={t('book.guestTitle')}>
+              {t('book.guestText')}
+              <div className="mt-3">
+                <Link className="g1-btn g1-btn--sm g1-btn--primary" to={`/signin?next=${encodeURIComponent(`/books/${book.id}`)}`}>
+                  {t('book.guestAction')}
+                </Link>
+              </div>
+            </Callout>
+          )}
+          {book.can_download && !guest && !hasKindle && (
             <p className="m-0 text-sm text-muted">
               {t('book.noKindle')}{' '}
-              <Link className="g1-link" to="/settings">
-                {t('send.openSettings')}
+              <Link className="g1-link" to="/setup">
+                {t('book.setupLink')}
               </Link>
             </p>
           )}
 
           <ErrorCallout code={errorCode(send.error)} />
 
-          {showBook && session.data?.feedback && (
+          {showBook && me && session.data?.feedback && (
             <div className="border-t border-line pt-5">
               <Feedback bookId={book.id} />
             </div>

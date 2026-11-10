@@ -75,6 +75,10 @@ class User(Base):
     language = Column(String)  # NULL: follow the Telegram app language
     setup_verified = Column(Integer, default=0)  # the test book arrived
     amazon_store = Column(String)  # e.g. 'amazon.de', picked by the user; NULL: guess it (see core.kindle)
+    test_book_sent_at = Column(DateTime)  # the last test book mailed to kindle_email; NULL: none since it was set
+    # Set for a web visitor who made a book without signing in. Signing in merges the guest into the
+    # account; guests nobody signed in for are removed after a few days (core.accounts.prune_guests)
+    guest_since = Column(DateTime)
 
     @property
     def image_links(self) -> bool:
@@ -89,6 +93,10 @@ class User(Base):
         if mode == BOTH:
             return {KINDLE, TELEGRAM}
         return {KINDLE}
+
+    @property
+    def is_guest(self) -> bool:
+        return self.guest_since is not None
 
     @property
     def chose_chat_only(self) -> bool:

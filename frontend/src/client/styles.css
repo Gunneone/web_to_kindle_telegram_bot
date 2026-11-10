@@ -208,3 +208,51 @@
   color: var(--esel-mark);
   user-select: none;
 }
+
+/* Questions on the start page: a plain list that opens one answer at a time, with a plus that turns. */
+.esel-faq summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--g1-space-4);
+  padding: var(--g1-space-4) 0;
+  font-weight: 500;
+  cursor: pointer;
+  list-style: none;
+}
+.esel-faq summary::-webkit-details-marker {
+  display: none;
+}
+.esel-faq summary::after {
+  content: '+';
+  flex-shrink: 0;
+  font-family: var(--g1-font-mono);
+  color: var(--g1-accent-text);
+  transition: transform var(--g1-dur-fast) var(--g1-ease);
+}
+.esel-faq[open] summary::after {
+  transform: rotate(45deg);
+}
+.esel-faq summary:focus-visible {
+  outline: 2px solid var(--g1-focus);
+  outline-offset: 2px;
+}
+
+/* Choices in the setup ("What do you read on?"): whole cards are buttons. */
+.esel-choice {
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  transition: border-color var(--g1-dur-fast) var(--g1-ease);
+}
+.esel-choice:hover,
+.esel-choice:focus-visible {
+  --g1-edge: var(--g1-primary);
+}
+
+/* The bookmarklet: a button that is meant to be dragged, not clicked. */
+.esel-bookmarklet {
+  cursor: grab;
+}

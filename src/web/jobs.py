@@ -20,7 +20,8 @@ logger = logging.getLogger(__name__)
 DOWNLOAD = 'download'
 TARGETS = {db.KINDLE: db.KINDLE, DOWNLOAD: db.TELEGRAM}
 KEEP_FINISHED_SECONDS = 600
-MAX_ACTIVE_PER_USER = 5
+MAX_ACTIVE_PER_USER = 10  # as many links as the bot takes from one message
+MAX_ACTIVE_PER_GUEST = 2
 
 
 @dataclass
@@ -110,7 +111,7 @@ def host(url: str | None) -> str:
     return pipeline.host(url or '')
 
 
-def _iso(value) -> str | None:
+def iso(value) -> str | None:
     return value.isoformat(timespec='seconds') + 'Z' if value else None
 
 
@@ -159,7 +160,7 @@ def serialize(article: db.Article) -> dict:
         'delivered': delivered,
         'failure': failure,
         'detail': detail,
-        'created_at': _iso(article.timestamp),
+        'created_at': iso(article.timestamp),
         'size': size,
         'minutes': book.read_minutes if book else None,
         'paywalled': bool(book.is_preview if book else (article.paywalled or article.status == db.PREVIEW)),

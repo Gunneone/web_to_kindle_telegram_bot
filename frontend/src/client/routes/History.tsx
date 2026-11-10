@@ -1,6 +1,6 @@
 import { useMutation } from '@tanstack/react-query';
 import { Link } from 'react-router';
-import { BookActions, BookRow, StatusBadge } from '../components/BookRow';
+import { BookActions, BookRow, BookTitle, StatusBadge } from '../components/BookRow';
 import { ErrorCallout } from '../components/Callout';
 import { PageHead, Scribble } from '../components/Text';
 import { useI18n } from '../i18n';
@@ -66,9 +66,7 @@ export function History() {
               {rows.map((book) => (
                 <tr key={book.id}>
                   <td className="max-w-[28rem]">
-                    <a className="g1-link block truncate" href={book.url} target="_blank" rel="noopener noreferrer">
-                      {book.title}
-                    </a>
+                    <BookTitle book={book} />
                     <span className="g1-meta">
                       {book.host}
                       {book.status === 'processing' && book.stage ? ` · ${t(`books.stage.${book.stage}`)}` : ''}

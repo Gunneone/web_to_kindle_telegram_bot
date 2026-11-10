@@ -162,6 +162,11 @@ gets the same Kindle address, settings and history on both. It speaks English an
 
 - **Sign in** with Telegram, Google or an email address (a 6-digit code or a link, no passwords). Connecting
   Telegram to a web-only account merges the two.
+- **Try without an account:** visitors can make a book from the start page to look at and download (5 an
+  hour per address). It belongs to a guest account that moves into the real one when they sign in; guests
+  nobody signs in for are deleted after 7 days.
+- **Send from anywhere:** a bookmarklet on the Send page, and a web app manifest whose share target puts
+  Eselsohr in Android's share sheet once it is added to the home screen. Both open `/?url=…`.
 - **Backend:** `src/web/` is a FastAPI app over `src/core/`; `python src/web_server.py` serves the API and the
   built client. Books are made in the background and the client polls their progress.
 - **Client:** `frontend/` is React, Vite and Tailwind v4. Colors, fonts and components come from the shared

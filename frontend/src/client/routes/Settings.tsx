@@ -1,15 +1,12 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { IconArrowUpRight, IconCopy } from '@tabler/icons-react';
-import { useState, type FormEvent } from 'react';
-import { useNavigate, useSearchParams } from 'react-router';
+import { useState } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router';
 import { Callout, ErrorCallout } from '../components/Callout';
 import { EmailSignIn } from '../components/EmailSignIn';
 import { PageHead, SectionHead } from '../components/Text';
 import { LANGS, LANGUAGE_NAMES, useI18n, type Lang } from '../i18n';
 import {
-  confirmSetup,
   deleteMe,
-  sendTestBook,
   signInUrl,
   signOut,
   updateMe,
@@ -19,155 +16,39 @@ import {
 } from '../lib/api';
 import { useMe, useResetSession, useSession, useSetUser } from '../lib/session';
 
+/** The e-reader at a glance; setting it up or changing it happens in the setup (/setup). */
 function KindleSection({ me }: { me: Me }) {
   const { t } = useI18n();
-  const setUser = useSetUser();
-  const [address, setAddress] = useState(me.kindle_email ?? '');
-  const [copied, setCopied] = useState(false);
-  const [testSent, setTestSent] = useState(false);
-
-  const save = useMutation({
-    mutationFn: (value: string) => updateMe({ kindle_email: value }),
-    onSuccess: ({ user }) => {
-      setUser(user);
-      setAddress(user.kindle_email ?? '');
-      setTestSent(false);
-    },
-  });
-  const test = useMutation({ mutationFn: sendTestBook, onSuccess: () => setTestSent(true) });
-  const arrived = useMutation({ mutationFn: confirmSetup, onSuccess: ({ user }) => setUser(user) });
-  const store = useMutation({
-    mutationFn: (value: string) => updateMe({ amazon_store: value }),
-    onSuccess: ({ user }) => setUser(user),
-  });
-  const error = (save.error ?? test.error ?? arrived.error ?? store.error) as ApiError | null;
-
-  const submit = (event: FormEvent) => {
-    event.preventDefault();
-    save.mutate(address.trim());
-  };
-  const copy = async () => {
-    if (!me.sender_email) return;
-    try {
-      await navigator.clipboard.writeText(me.sender_email);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      /* clipboard blocked: the address is selectable on screen */
-    }
-  };
-
-  // A PocketBook address works too, with its own steps 2 and 3: PocketBook has no sender list to fill
-  // in, it emails its owner to confirm a new sender. Everything else stays about the Kindle.
-  const pocketbook = me.device === 'pocketbook';
-
   return (
     <section className="g1-section">
       <SectionHead eyebrow={t('settings.kindle.eyebrow')} title={t('settings.kindle.title')} />
-      <div className="g1-stack">
-        {me.setup_verified && me.kindle_email && (
-          <Callout tone="success">
-            {t(pocketbook ? 'settings.kindle.pocketbook.connected' : 'settings.kindle.connected')}
-          </Callout>
-        )}
-        <p className="m-0 text-muted">
-          {t('settings.kindle.step1')}{' '}
-          <a className="g1-link inline-flex items-center gap-1" href={me.amazon_devices_url} target="_blank" rel="noopener noreferrer">
-            {t('settings.kindle.findAddressLink')} <IconArrowUpRight className="g1-icon" aria-hidden />
-          </a>
-        </p>
-        {!pocketbook && (
-          <div>
-            <label className="g1-label" htmlFor="amazon-store">
-              {t('settings.kindle.storeLabel')}
-            </label>
-            <select
-              id="amazon-store"
-              className="g1-select"
-              aria-describedby="amazon-store-help"
-              value={me.amazon_store}
-              disabled={store.isPending}
-              onChange={(event) => store.mutate(event.target.value)}
-            >
-              {me.amazon_stores.map((domain) => (
-                <option key={domain} value={domain}>
-                  {domain}
-                </option>
-              ))}
-            </select>
-            <span id="amazon-store-help" className="mt-1 block text-sm text-muted">
-              {t(me.amazon_store_chosen ? 'settings.kindle.storeHelpChosen' : 'settings.kindle.storeHelpGuessed')}
+      {me.kindle_email ? (
+        <div className="g1-stack">
+          <p className="m-0 flex flex-wrap items-center gap-3">
+            <code className="g1-mono break-all">{me.kindle_email}</code>
+            <span className={me.setup_verified ? 'g1-badge g1-badge--primary' : 'g1-badge text-warning [--g1-edge:var(--g1-warning)]'}>
+              {t(me.setup_verified ? 'settings.kindle.verified' : 'settings.kindle.unverified')}
             </span>
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Link to="/setup?step=address" className="g1-btn g1-btn--sm">
+              {t('settings.kindle.change')}
+            </Link>
+            <Link to="/setup" className={me.setup_verified ? 'g1-btn g1-btn--sm g1-btn--ghost' : 'g1-btn g1-btn--sm g1-btn--primary'}>
+              {t('settings.kindle.openSetup')}
+            </Link>
           </div>
-        )}
-        <p className="m-0 text-sm text-muted">{t('settings.kindle.pocketbookHint')}</p>
-        <form onSubmit={submit} className="g1-stack">
+        </div>
+      ) : (
+        <div className="g1-stack">
+          <p className="m-0 text-muted">{t(me.download_only ? 'settings.kindle.downloadOnly' : 'settings.kindle.none')}</p>
           <div>
-            <label className="g1-label" htmlFor="kindle-address">
-              {t('settings.kindle.addressLabel')}
-            </label>
-            <input
-              id="kindle-address"
-              className="g1-input"
-              type="email"
-              autoComplete="off"
-              placeholder={t('settings.kindle.addressPlaceholder')}
-              value={address}
-              onChange={(event) => setAddress(event.target.value)}
-            />
+            <Link to={me.download_only ? '/setup?step=choose' : '/setup'} className="g1-btn g1-btn--sm g1-btn--primary">
+              {t('settings.kindle.setup')}
+            </Link>
           </div>
-          <div>
-            <button type="submit" className="g1-btn" disabled={save.isPending || address.trim() === (me.kindle_email ?? '')}>
-              {save.isSuccess && address.trim() === (me.kindle_email ?? '') ? t('common.saved') : t('common.save')}
-            </button>
-          </div>
-        </form>
-
-        {me.kindle_email && (
-          <>
-            <p className="m-0 text-muted">
-              {t(pocketbook ? 'settings.kindle.pocketbook.step2' : 'settings.kindle.step2')}
-            </p>
-            {me.sender_email ? (
-              <div className="flex flex-wrap items-center gap-2">
-                <code className="g1-mono select-all bg-surface-2 px-3 py-2">{me.sender_email}</code>
-                <button type="button" className="g1-btn g1-btn--sm" onClick={() => void copy()}>
-                  <IconCopy className="g1-icon" aria-hidden />
-                  {copied ? t('common.copied') : t('common.copy')}
-                </button>
-                {!pocketbook && (
-                  <a className="g1-link inline-flex items-center gap-1" href={me.amazon_settings_url} target="_blank" rel="noopener noreferrer">
-                    {t('settings.kindle.amazonLink')} <IconArrowUpRight className="g1-icon" aria-hidden />
-                  </a>
-                )}
-              </div>
-            ) : (
-              <Callout tone="warning">{t('settings.kindle.noSender')}</Callout>
-            )}
-
-            <p className="m-0 text-muted">
-              {t(pocketbook ? 'settings.kindle.pocketbook.step3' : 'settings.kindle.step3')}
-            </p>
-            <div className="flex flex-wrap gap-2">
-              <button type="button" className="g1-btn" disabled={test.isPending} onClick={() => test.mutate()}>
-                {t('settings.kindle.testBook')}
-              </button>
-              {testSent && !me.setup_verified && (
-                <button type="button" className="g1-btn g1-btn--primary" disabled={arrived.isPending} onClick={() => arrived.mutate()}>
-                  {t('settings.kindle.arrived')}
-                </button>
-              )}
-            </div>
-            {testSent && !me.setup_verified && (
-              <Callout tone="info">
-                {t(pocketbook ? 'settings.kindle.pocketbook.testSent' : 'settings.kindle.testSent', { email: me.kindle_email ?? '' })}{' '}
-                {t(pocketbook ? 'settings.kindle.pocketbook.notArrived' : 'settings.kindle.notArrived')}
-              </Callout>
-            )}
-          </>
-        )}
-        <ErrorCallout code={error?.code} />
-      </div>
+        </div>
+      )}
     </section>
   );
 }

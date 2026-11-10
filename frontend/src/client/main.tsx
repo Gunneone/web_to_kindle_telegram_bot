@@ -12,6 +12,7 @@ import { Home } from './routes/Home';
 import { NotFound } from './routes/NotFound';
 import { Privacy } from './routes/Privacy';
 import { Settings } from './routes/Settings';
+import { Setup } from './routes/Setup';
 import { SignIn } from './routes/SignIn';
 import { Verify } from './routes/Verify';
 import './styles.css';
@@ -36,9 +37,11 @@ createRoot(document.getElementById('root')!).render(
               <Route path="signin" element={<SignIn />} />
               <Route path="signin/verify" element={<Verify />} />
               <Route path="privacy" element={<Privacy />} />
+              {/* A book can belong to a visitor who tried Eselsohr without signing in */}
+              <Route path="books/:id" element={<BookPage />} />
               <Route element={<RequireUser />}>
                 <Route path="history" element={<History />} />
-                <Route path="books/:id" element={<BookPage />} />
+                <Route path="setup" element={<Setup />} />
                 <Route path="settings" element={<Settings />} />
               </Route>
               <Route path="*" element={<NotFound />} />

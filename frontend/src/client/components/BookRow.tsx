@@ -1,4 +1,4 @@
-import { IconArrowUpRight, IconBook, IconDownload, IconRefresh, IconSend } from '@tabler/icons-react';
+import { IconArrowUpRight, IconDownload, IconRefresh, IconSend } from '@tabler/icons-react';
 import { Link } from 'react-router';
 import { useI18n, type MessageKey } from '../i18n';
 import { downloadUrl, type Book, type BookStatus, type Stage, type Target } from '../lib/api';
@@ -57,7 +57,29 @@ export function failureText(book: Book, t: (key: MessageKey, vars?: Record<strin
   return t(key, { host: book.host });
 }
 
-/** Look inside, download, send to Kindle, or try again: whatever makes sense for this book. */
+/** The book's title, opening it in Eselsohr, and a small link to the page it came from. */
+export function BookTitle({ book, className = '' }: { book: Book; className?: string }) {
+  const { t } = useI18n();
+  return (
+    <span className={`flex min-w-0 items-center gap-2 ${className}`}>
+      <Link className="g1-link min-w-0 truncate font-medium" to={`/books/${book.id}`}>
+        {book.title}
+      </Link>
+      <a
+        className="shrink-0 text-muted hover:text-fg"
+        href={book.url}
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label={t('books.openOriginal')}
+        title={t('books.openOriginal')}
+      >
+        <IconArrowUpRight className="g1-icon" aria-hidden />
+      </a>
+    </span>
+  );
+}
+
+/** Download, send to Kindle, or try again: whatever makes sense for this book. */
 export function BookActions({
   book,
   hasKindle,
@@ -75,12 +97,6 @@ export function BookActions({
   const done = book.status === 'ready' || book.status === 'sent' || book.status === 'preview';
   return (
     <div className="flex flex-wrap items-center gap-2">
-      {book.can_download && (
-        <Link className="g1-btn g1-btn--sm" to={`/books/${book.id}`}>
-          <IconBook className="g1-icon" aria-hidden />
-          {t('books.open')}
-        </Link>
-      )}
       {book.can_download && (
         <a className="g1-btn g1-btn--sm" href={downloadUrl(book.id)} download>
           <IconDownload className="g1-icon" aria-hidden />
@@ -128,16 +144,7 @@ export function BookRow(props: {
     <li className="border-b border-line py-4 first:pt-0">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1 basis-64">
-          <a
-            className="g1-link inline-flex max-w-full items-center gap-1"
-            href={book.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            title={t('books.openOriginal')}
-          >
-            <span className="truncate">{book.title}</span>
-            <IconArrowUpRight className="g1-icon shrink-0" aria-hidden />
-          </a>
+          <BookTitle book={book} />
           <p className="g1-meta mb-0 mt-1">{meta.join(' · ')}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">

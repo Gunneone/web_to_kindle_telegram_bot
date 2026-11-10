@@ -22,6 +22,10 @@ export interface Me {
   /** Amazon's device list, where each Kindle shows its address (setup step 1) */
   amazon_devices_url: string;
   providers: Provider[];
+  /** When the last test book went out (ISO), so the setup can ask whether it arrived after a reload */
+  test_sent_at: string | null;
+  /** The person reads without a Kindle and only downloads books */
+  download_only: boolean;
 }
 
 export interface SessionInfo {
@@ -103,7 +107,13 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 }
 
 export const getSession = () => request<SessionInfo>('GET', '/api/session');
-export const updateMe = (body: { kindle_email?: string; image_links?: boolean; language?: string; amazon_store?: string }) =>
+export const updateMe = (body: {
+  kindle_email?: string;
+  image_links?: boolean;
+  language?: string;
+  amazon_store?: string;
+  download_only?: boolean;
+}) =>
   request<{ user: Me }>('PATCH', '/api/me', body);
 export const deleteMe = () => request<void>('DELETE', '/api/me');
 export const sendTestBook = () => request<void>('POST', '/api/me/test-book');
@@ -119,8 +129,12 @@ export const verifyEmailToken = (token: string) => request<{ user: Me }>('POST',
 export const listBooks = (offset = 0, limit = 20) =>
   request<{ books: Book[]; total: number }>('GET', `/api/books?offset=${offset}&limit=${limit}`);
 export const getBook = (id: number) => request<{ book: Book }>('GET', `/api/books/${id}`);
-/** Builds the book without delivering it, so it can be looked at first. */
-export const createBook = (url: string, force = false) => request<{ book: Book }>('POST', '/api/books', { url, force });
+/**
+ * Makes a book. Without a target it is only built, so it can be looked at first; that also works
+ * without signing in (a try, kept under a guest account until the visitor signs in).
+ */
+export const createBook = (url: string, force = false, target?: Target) =>
+  request<{ book: Book }>('POST', '/api/books', target ? { url, force, target } : { url, force });
 /** Delivers a built book; with no target, builds it again (a retry after a failure). */
 export const resendBook = (id: number, target?: Target) =>
   request<{ book: Book }>('POST', `/api/books/${id}/send`, target ? { target } : {});

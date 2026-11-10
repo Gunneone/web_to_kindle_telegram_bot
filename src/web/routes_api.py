@@ -18,7 +18,8 @@ from web_scraper import Article as WebArticle
 from web_scraper.url_utils import normalize_url
 
 from . import feedback, jobs, preview
-from .deps import State, current_user, request_language, require_user, state
+from .deps import (State, book_owner, client_ip, current_guest, current_user, request_language, require_user,
+                   start_guest, state)
 from .errors import ApiError
 from .texts import LANGUAGES, t
 
@@ -55,6 +56,10 @@ def me_payload(user: db.User, request: Request) -> dict:
         'amazon_settings_url': kindle.amazon_settings_url(chosen=store),
         'amazon_devices_url': kindle.amazon_devices_url(chosen=store),
         'providers': sorted({i.provider for i in accounts.identities(user.user_id)}),
+        # When the last test book went out, so the setup can ask "did it arrive?" after a reload
+        'test_sent_at': jobs.iso(user.test_book_sent_at),
+        # The person said they read without a Kindle (EPUB files only), so don't keep asking for an address
+        'download_only': user.chose_chat_only,
     }
 
 
@@ -70,6 +75,7 @@ class MePatch(BaseModel):
     image_links: bool | None = None
     language: str | None = None
     amazon_store: str | None = None  # '' goes back to guessing
+    download_only: bool | None = None  # True: "I read without a Kindle"; False: undo that
 
 
 @router.patch('/me')
@@ -81,7 +87,14 @@ async def patch_me(body: MePatch, request: Request, user: db.User = Depends(requ
             raise ApiError(400, 'INVALID_KINDLE_EMAIL')
         address = address or None
         if address != user.kindle_email:
-            fields.update(kindle_email=address, setup_verified=0)
+            fields.update(kindle_email=address, setup_verified=0, test_book_sent_at=None)
+            if address:  # like the bot: an address means "deliver to my Kindle", unless both were chosen
+                fields['delivery_mode'] = db.BOTH if user.delivery_mode == db.BOTH else db.KINDLE
+    if body.download_only is not None:
+        if body.download_only:
+            fields['delivery_mode'] = db.TELEGRAM
+        elif user.delivery_mode == db.TELEGRAM:
+            fields['delivery_mode'] = db.KINDLE if (fields.get('kindle_email') or user.kindle_email) else None
     if body.image_links is not None:
         fields['preserve_image_links'] = int(body.image_links)
     if body.amazon_store is not None:
@@ -122,6 +135,7 @@ async def test_book(request: Request, user: db.User = Depends(require_user), app
     except EmailError as e:
         logger.error(f'Could not send the test book to user {user.user_id}: {e}')
         raise ApiError(502, 'EMAIL_FAILED')
+    db.update_user(user.user_id, test_book_sent_at=db.utcnow())
     return Response(status_code=204)
 
 
@@ -147,7 +161,7 @@ def _owned(article_id: int, user: db.User) -> db.Article:
 
 
 @router.get('/books/{article_id}')
-async def get_book(article_id: int, user: db.User = Depends(require_user)):
+async def get_book(article_id: int, user: db.User = Depends(book_owner)):
     return {'book': jobs.serialize(_owned(article_id, user))}
 
 
@@ -178,13 +192,25 @@ def _clean_url(text: str) -> str:
 
 
 def _guard_capacity(user: db.User, app: State) -> None:
-    if jobs.active_count(user.user_id) >= jobs.MAX_ACTIVE_PER_USER or not app.books_per_user.allow(str(user.user_id)):
+    limit = jobs.MAX_ACTIVE_PER_GUEST if user.is_guest else jobs.MAX_ACTIVE_PER_USER
+    if jobs.active_count(user.user_id) >= limit or not app.books_per_user.allow(str(user.user_id)):
         raise ApiError(429, 'RATE_LIMITED')
 
 
 @router.post('/books', status_code=202)
-async def new_book(body: NewBook, user: db.User = Depends(require_user), app: State = Depends(state)):
+async def new_book(body: NewBook, request: Request, app: State = Depends(state)):
+    """
+    Make a book. Without a sign-in this is a try: the book is only built (to look at and download),
+    under a guest account that moves into the real one when the visitor signs in.
+    """
     url = _clean_url(body.url)
+    user = current_user(request)
+    if user is None:
+        if body.target is not None:  # delivering needs an account with an address
+            raise ApiError(401, 'UNAUTHENTICATED')
+        if not app.guest_books_per_ip.allow(client_ip(request)):
+            raise ApiError(429, 'RATE_LIMITED')
+        user = current_guest(request) or start_guest(request)
     targets = set() if body.target is None else _targets(body.target, user)
     _guard_capacity(user, app)
     article_id, outcome = await jobs.start(user, url, targets, force=body.force)
@@ -196,8 +222,12 @@ async def new_book(body: NewBook, user: db.User = Depends(require_user), app: St
 
 
 @router.post('/books/{article_id}/send', status_code=202)
-async def send_book(article_id: int, body: Resend, user: db.User = Depends(require_user),
+async def send_book(article_id: int, body: Resend, request: Request, user: db.User = Depends(book_owner),
                     app: State = Depends(state)):
+    if user.is_guest and body.target is not None:  # a guest may only retry a failed build
+        raise ApiError(401, 'UNAUTHENTICATED')
+    if user.is_guest and not app.guest_books_per_ip.allow(client_ip(request)):
+        raise ApiError(429, 'RATE_LIMITED')
     article = _owned(article_id, user)
     targets = set() if body.target is None else _targets(body.target, user)
     if jobs.is_running(article.id):
@@ -225,7 +255,7 @@ def _built(article_id: int, user: db.User) -> db.Article:
 
 
 @router.get('/books/{article_id}/preview')
-async def preview_book(article_id: int, request: Request, user: db.User = Depends(require_user)):
+async def preview_book(article_id: int, request: Request, user: db.User = Depends(book_owner)):
     article = _built(article_id, user)
     try:
         page = await asyncio.to_thread(preview.render, article.epub_path, article.title,
@@ -262,7 +292,7 @@ async def book_feedback(article_id: int, body: Feedback, user: db.User = Depends
 
 
 @router.get('/books/{article_id}/epub')
-async def download_book(article_id: int, user: db.User = Depends(require_user)):
+async def download_book(article_id: int, user: db.User = Depends(book_owner)):
     article = _built(article_id, user)
     return FileResponse(article.epub_path, media_type='application/epub+zip', filename=_filename(article.title),
                         headers={'Cache-Control': 'private, no-store'})

@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- Home-screen icon: the light-mode mark on the light page color, kept inside the safe zone of
+       maskable icons (the middle 80 %), so round and squircle masks never cut the e-reader. -->
+  <rect width="512" height="512" fill="#F5F6F8"/>
+  <g transform="translate(96 96) scale(5)">
+    <rect x="12" y="3" width="40" height="58" rx="6" fill="#2B2F36"/>
+    <path fill="#F4F5F7" d="M26 7H46.5Q48 7 48 8.5V48.5Q48 50 46.5 50H17.5Q16 50 16 48.5V17Z"/>
+    <path fill="#2097F3" d="M26 7L16 17H26Z"/>
+    <path fill="#4A505A" d="M20 25H44V28H20Z M20 33H38V36H20Z"/>
+  </g>
+</svg>
