@@ -94,6 +94,58 @@
   flex-direction: column;
 }
 
+/* Keep room for the scrollbar on short pages too, so the header doesn't shift sideways between pages. */
+:root {
+  scrollbar-gutter: stable;
+}
+
+/*
+ * The graph paper behind the page is quieter in light mode, where it competes with body text: half the
+ * shared line color. Dark mode keeps it as it is.
+ */
+:root {
+  --esel-grid-line: var(--g1-grid-line);
+}
+body {
+  --g1-grid-line: light-dark(color-mix(in srgb, var(--esel-grid-line) 50%, transparent), var(--esel-grid-line));
+}
+
+/*
+ * Every page uses the same container (--g1-width), so the left edge stays put from page to page. Forms
+ * and reading pages keep a narrower column (--g1-width-prose) inside it, aligned left rather than centred.
+ */
+.esel-column > * {
+  max-width: var(--g1-width-prose);
+}
+
+/*
+ * A stack spaces its children with a top margin. Tailwind's m-0 sits in a later layer and would cancel it,
+ * gluing helper text to the buttons above, so the stack's spacing wins here.
+ */
+.g1-stack > * + * {
+  margin-top: var(--g1-space-4);
+}
+/* The buttons that end a form or step stand a little apart from what they act on */
+.g1-stack > .esel-actions {
+  margin-top: var(--g1-space-6);
+}
+
+/* "or" between two ways of doing the same thing, with a line on either side. */
+.esel-divider {
+  display: flex;
+  align-items: center;
+  gap: var(--g1-space-3);
+}
+.esel-divider::before,
+.esel-divider::after {
+  content: '';
+  flex: 1;
+  border-top: 1px solid var(--g1-border);
+}
+.g1-stack > .esel-divider {
+  margin-block: var(--g1-space-5);
+}
+
 /*
  * The e-reader around a book preview, modelled on a Kindle Paperwhite (11th/12th gen): a black
  * soft-touch body under one flush sheet of glass, even bezels on three sides, a deeper chin with

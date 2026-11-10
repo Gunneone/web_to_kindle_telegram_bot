@@ -99,11 +99,11 @@ export function Landing({ initialLink = '' }: { initialLink?: string }) {
 
       <section className="g1-section">
         <SectionHead eyebrow={t('home.faq.eyebrow')} title={t('home.faq.title')} />
-        <div className="max-w-3xl border-t border-line">
+        <div className="border-t border-line">
           {QUESTIONS.map((question) => (
             <details key={question} className="esel-faq border-b border-line">
               <summary>{t(`home.faq.items.${question}.q`)}</summary>
-              <p className="m-0 pb-4 text-muted">{t(`home.faq.items.${question}.a`)}</p>
+              <p className="m-0 max-w-prose pb-4 text-muted">{t(`home.faq.items.${question}.a`)}</p>
             </details>
           ))}
         </div>

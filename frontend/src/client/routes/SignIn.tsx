@@ -26,7 +26,7 @@ export function SignIn() {
   // Only name the ways in that are switched on
   const lead = providers?.telegram ? (providers.google ? 'all' : 'telegram') : providers?.google ? 'google' : 'email';
   return (
-    <div className="g1-container g1-container--prose">
+    <div className="g1-container esel-column">
       <PageHead eyebrow={t('signin.eyebrow')} title={t('signin.title')} lead={session.isPending ? undefined : t(`signin.lead.${lead}`)} />
       <div className="g1-stack">
         <ErrorCallout code={params.get('error')} />
@@ -46,7 +46,7 @@ export function SignIn() {
             )}
           </div>
         )}
-        {(providers?.telegram || providers?.google) && <p className="g1-eyebrow m-0">{t('common.or')}</p>}
+        {(providers?.telegram || providers?.google) && <p className="esel-divider g1-eyebrow m-0">{t('common.or')}</p>}
         <EmailSignIn next={next} onDone={() => void reset()} />
       </div>
     </div>

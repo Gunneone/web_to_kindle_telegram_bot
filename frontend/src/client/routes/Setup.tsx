@@ -43,7 +43,7 @@ function Wizard({ me, initial }: { me: Me; initial: Step }) {
 
   const index = (NUMBERED as readonly Step[]).indexOf(step);
   return (
-    <div className="g1-container g1-container--prose">
+    <div className="g1-container esel-column">
       <PageHead eyebrow={t('setup.eyebrow')} title={t('setup.title')} lead={t('setup.lead')} />
       {index >= 0 && (
         <ol className="m-0 mb-8 flex list-none gap-2 p-0" aria-label={t('setup.stepsLabel')}>

@@ -6,7 +6,7 @@ const SECTIONS = ['what', 'books', 'mail', 'cookies', 'third', 'delete'] as cons
 export function Privacy() {
   const t = useT();
   return (
-    <div className="g1-container g1-container--prose">
+    <div className="g1-container esel-column">
       <PageHead eyebrow={t('privacy.eyebrow')} title={t('privacy.title')} lead={t('privacy.lead')} />
       <p className="g1-meta">
         last_updated <span className="g1-hl">=</span> {t('privacy.updated')}
