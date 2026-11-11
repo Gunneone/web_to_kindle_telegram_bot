@@ -1,10 +1,12 @@
 import { PageHead } from '../components/Text';
 import { useT } from '../i18n';
+import { usePageTitle } from '../lib/title';
 
 const SECTIONS = ['what', 'books', 'mail', 'cookies', 'third', 'delete'] as const;
 
 export function Privacy() {
   const t = useT();
+  usePageTitle(t('privacy.title'));
   return (
     <div className="g1-container g1-container--prose">
       <PageHead eyebrow={t('privacy.eyebrow')} title={t('privacy.title')} lead={t('privacy.lead')} />

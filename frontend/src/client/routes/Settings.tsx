@@ -16,6 +16,7 @@ import {
   type Provider,
 } from '../lib/api';
 import { useMe, useResetSession, useSession, useSetUser } from '../lib/session';
+import { usePageTitle } from '../lib/title';
 
 /**
  * The e-reader at a glance; setting it up, changing or removing the address happens in the setup (/setup).
@@ -205,6 +206,7 @@ function AccountSection({ me }: { me: Me }) {
 
 export function Settings() {
   const { t } = useI18n();
+  usePageTitle(t('settings.title'));
   const me = useMe();
   const [params] = useSearchParams();
   if (!me) return null;

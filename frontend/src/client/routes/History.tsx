@@ -11,6 +11,7 @@ import { errorCode, HISTORY_SHOWS, resendBook, type Book, type HistoryShow, type
 import { placeOf, useAllBooks, useArrivalHint, useRefreshBooks } from '../lib/books';
 import { formatDate } from '../lib/format';
 import { useMe } from '../lib/session';
+import { usePageTitle } from '../lib/title';
 
 const SEARCH_DELAY_MS = 250;
 
@@ -19,6 +20,7 @@ const asShow = (value: string | null): HistoryShow | '' =>
 
 export function History() {
   const { t, lang } = useI18n();
+  usePageTitle(t('history.title'));
   const me = useMe();
   const refresh = useRefreshBooks();
   const hint = useArrivalHint();
@@ -52,15 +54,21 @@ export function History() {
     return () => clearTimeout(timer);
   }, [typed, search]);
 
+  const filtered = Boolean(search || show);
+  // While searching or filtering, the count says how many of all the books match: "0 of 2 books"
+  const everything = useAllBooks();
   const rows = books.data?.pages.flatMap((page) => page.books) ?? [];
   const total = books.data?.pages[0]?.total ?? 0;
+  const all = everything.data?.pages[0]?.total ?? total;
+  const count = filtered
+    ? t('history.countOf', { n: total, total: all })
+    : t(total === 1 ? 'history.countOne' : 'history.count', { n: total });
   const hasKindle = Boolean(me?.kindle_email);
-  const filtered = Boolean(search || show);
   const onSend = (target_book: Book, target?: Target) => resend.mutate({ book: target_book, target });
 
   return (
     <div className="g1-container">
-      <PageHead eyebrow={t('history.eyebrow', { n: total })} title={t('history.title')} />
+      <PageHead eyebrow={count} title={t('history.title')} />
       {hasKindle && !me?.setup_verified && rows.length > 0 && (
         <div className="mb-6">
           <UnconfirmedCallout />

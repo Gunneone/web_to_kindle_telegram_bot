@@ -14,6 +14,7 @@ import { downloadUrl, errorCode, previewUrl, resendBook, type Target } from '../
 import { useBook, useRefreshBooks } from '../lib/books';
 import { formatDate, formatSize } from '../lib/format';
 import { useMe, useSession } from '../lib/session';
+import { usePageTitle } from '../lib/title';
 
 /** One book: watch it being made, read it on a little e-reader, then send it, download it, or report a problem. */
 export function BookPage() {
@@ -25,6 +26,7 @@ export function BookPage() {
   const client = useQueryClient();
   const refresh = useRefreshBooks();
   const query = useBook(bookId);
+  usePageTitle(query.data?.book?.title ?? t('titles.book'));
   const location = useLocation();
   const navigate = useNavigate();
   // Arriving from "not on your Kindle?": the help is opened, and scrolled to once the book is there
@@ -40,13 +42,13 @@ export function BookPage() {
     },
   });
 
-  // Back to where the book was opened from: Send or the history (with its search), else the history
+  // Back to where the book was opened from: Send or the library (with its search), else the library
   const from = (location.state as FromState | null)?.from;
   const backTo = !me ? '/' : from === '/' || from?.startsWith('/history') ? from : '/history';
   const back = (
     <Link className="g1-link inline-flex items-center gap-1 text-sm" to={backTo}>
       <IconArrowLeft className="g1-icon" aria-hidden />
-      {!me ? t('book.another') : backTo === '/' ? t('book.backToSend') : t('book.allBooks')}
+      {!me ? t('book.another') : backTo === '/' ? t('book.backToSend') : t('book.backToLibrary')}
     </Link>
   );
 

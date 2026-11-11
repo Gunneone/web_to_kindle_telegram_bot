@@ -9,7 +9,7 @@ const HINT_BOOKS = 5;
 const working = (books: Book[] | undefined) => books?.some((book) => book.status === 'processing') ?? false;
 
 /** Where a book stands: still being made, where it went, or what went wrong. Paywalled is a separate tag. */
-export type Place = 'processing' | 'kindle' | 'telegram' | 'sent' | 'notSent' | 'failed' | 'interrupted';
+export type Place = 'processing' | 'kindle' | 'telegram' | 'sent' | 'ready' | 'failed' | 'interrupted';
 
 export function placeOf(book: Book): Place {
   if (book.status === 'processing' || book.status === 'failed' || book.status === 'interrupted') return book.status;
@@ -17,7 +17,8 @@ export function placeOf(book: Book): Place {
   if (book.delivered.includes('telegram')) return 'telegram';
   // Old rows only say that they were sent, not where
   if (book.status === 'sent' || book.status === 'preview') return 'sent';
-  return 'notSent';
+  // Made, not sent anywhere yet: ready to send or download
+  return 'ready';
 }
 
 /**

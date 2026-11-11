@@ -8,9 +8,11 @@ import { useT } from '../i18n';
 import { signInUrl } from '../lib/api';
 import { safeNext } from '../lib/format';
 import { useMe, useResetSession, useSession } from '../lib/session';
+import { usePageTitle } from '../lib/title';
 
 export function SignIn() {
   const t = useT();
+  usePageTitle(t('signin.title'));
   const [params] = useSearchParams();
   const navigate = useNavigate();
   const session = useSession();

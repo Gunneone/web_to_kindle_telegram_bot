@@ -47,7 +47,7 @@ const BADGE: Record<Place, string> = {
   kindle: 'g1-badge g1-badge--primary',
   telegram: 'g1-badge g1-badge--primary',
   sent: 'g1-badge g1-badge--primary',
-  notSent: 'g1-badge',
+  ready: 'g1-badge',
   failed: 'g1-badge text-danger [--g1-edge:var(--g1-danger)]',
   interrupted: 'g1-badge text-warning [--g1-edge:var(--g1-warning)]',
 };

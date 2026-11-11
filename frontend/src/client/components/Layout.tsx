@@ -37,7 +37,7 @@ export function Layout() {
               <NavLink to="/" end>
                 {t('nav.send')}
               </NavLink>
-              <NavLink to="/history">{t('nav.history')}</NavLink>
+              <NavLink to="/history">{t('nav.library')}</NavLink>
               <NavLink to="/settings">{t('nav.settings')}</NavLink>
             </nav>
           )}

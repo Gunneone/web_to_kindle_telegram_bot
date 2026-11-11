@@ -7,10 +7,12 @@ import { useT } from '../i18n';
 import { ApiError, verifyEmailToken } from '../lib/api';
 import { safeNext } from '../lib/format';
 import { useResetSession } from '../lib/session';
+import { usePageTitle } from '../lib/title';
 
 /** The page the sign-in mail links to. Signing in is a POST from here, so mail scanners can't use up the link. */
 export function Verify() {
   const t = useT();
+  usePageTitle(t('signin.title'));
   const [params] = useSearchParams();
   const navigate = useNavigate();
   const reset = useResetSession();

@@ -16,11 +16,18 @@ export const de: Messages = {
     or: 'oder',
     back: 'Zurück',
   },
+  titles: {
+    home: 'Eselsohr — das Web auf deinem Kindle lesen',
+    page: '{page} · Eselsohr',
+    setup: 'Einrichtung',
+    notFound: 'Seite nicht gefunden',
+    book: 'Buch',
+  },
   nav: {
     main: 'Hauptmenü',
     footer: 'Fußzeile',
     send: 'Senden',
-    history: 'Verlauf',
+    library: 'Bibliothek',
     settings: 'Einstellungen',
     signIn: 'Anmelden',
     privacy: 'Datenschutz',
@@ -33,7 +40,7 @@ export const de: Messages = {
     family: 'ein gunne.one-Projekt',
   },
   home: {
-    eyebrow: '// web → kindle · dortmund, de',
+    eyebrow: '// web → epub → kindle',
     title: 'Lies das Web auf deinem Kindle.',
     scribble: '(statt 47 offener Tabs)',
     lead: 'Füge einen Link ein. Eselsohr macht aus dem Artikel ein Buch und schickt es an dein Kindle, oder du lädst das EPUB herunter.',
@@ -44,7 +51,7 @@ export const de: Messages = {
       placeholder: 'https://example.com/ein-langer-text',
       submit: 'Kostenlose Vorschau machen',
       making: 'Geht los',
-      note: 'Zum Ausprobieren brauchst du kein Konto. Melde dich an, um Bücher an dein Kindle zu senden und einen Verlauf zu behalten.',
+      note: 'Zum Ausprobieren brauchst du kein Konto. Melde dich an, um Bücher an dein Kindle zu senden und in deiner Bibliothek zu behalten.',
     },
     sample: {
       title: 'Beispielbuch: Eine umgeknickte Ecke',
@@ -57,7 +64,7 @@ export const de: Messages = {
       action: 'Link einfügen',
     },
     faq: {
-      eyebrow: '02 / fragen',
+      eyebrow: 'fragen',
       title: 'Bevor du loslegst',
       privacyLink: 'Zur Datenschutzseite',
       items: {
@@ -83,28 +90,28 @@ export const de: Messages = {
         },
       },
     },
-    stepsEyebrow: '01 / so geht’s',
+    stepsEyebrow: 'so geht’s',
     stepsTitle: 'Drei Schritte, ein paar Sekunden',
     steps: {
       paste: {
-        eyebrow: '01 / einfügen',
+        eyebrow: 'schritt 1 / 3',
         title: 'Link einfügen',
         text: 'Jeder Artikel: Substack, Medium, ein Blog, eine Nachrichtenseite.',
       },
-      bind: {
-        eyebrow: '02 / binden',
+      make: {
+        eyebrow: 'schritt 2 / 3',
         title: 'Wir machen das Buch',
         text: 'Text und Bilder werden aus der Seite geholt und zu einem EPUB gebunden. Werbung und Cookie-Banner bleiben draußen.',
       },
       read: {
-        eyebrow: '03 / lesen',
+        eyebrow: 'schritt 3 / 3',
         title: 'Überall lesen',
         text: 'Es landet in deiner Kindle-Bibliothek, oder du lädst die Datei herunter und öffnest sie in jeder Lese-App.',
       },
     },
   },
   send: {
-    eyebrow: 'senden · link → buch',
+    eyebrow: 'link → buch',
     title: 'Artikel senden',
     lead: 'Füge einen Link ein, und in ein paar Sekunden ist das Buch auf deinem Kindle. Oder sieh es dir vorher an.',
     leadNoKindle: 'Füge einen Link ein. In ein paar Sekunden kannst du im Buch blättern und es herunterladen.',
@@ -133,10 +140,10 @@ export const de: Messages = {
     duplicateText: 'Mach es noch einmal, falls sich die Seite geändert hat.',
     sendAgain: 'Noch einmal machen',
     openIt: 'Öffnen',
-    recentEyebrow: 'zuletzt',
+    recentEyebrow: 'aus deiner bibliothek',
     recentTitle: 'Neueste Bücher',
     recentEmpty: 'Noch keine Bücher. Füge oben einen Link ein, um das erste zu machen.',
-    allHistory: 'Alle Bücher',
+    library: 'Zur Bibliothek',
   },
   shortcuts: {
     eyebrow: 'abkürzungen',
@@ -163,7 +170,7 @@ export const de: Messages = {
       kindle: 'An Kindle gesendet',
       telegram: 'In Telegram gesendet',
       sent: 'Gesendet',
-      notSent: 'Nicht gesendet',
+      ready: 'Bereit',
       failed: 'Fehlgeschlagen',
       interrupted: 'Unterbrochen',
     },
@@ -207,7 +214,7 @@ export const de: Messages = {
   },
   book: {
     eyebrow: 'buch · {host}',
-    allBooks: 'Alle Bücher',
+    backToLibrary: 'Zurück zur Bibliothek',
     backToSend: 'Zurück zu Senden',
     reader: 'Vorschau von „{title}“',
     readerLoading: 'Buch wird geöffnet',
@@ -235,7 +242,7 @@ export const de: Messages = {
   feedback: {
     open: 'Stimmt etwas mit diesem Buch nicht?',
     title: 'Was sieht falsch aus?',
-    lead: 'Deine Nachricht geht direkt an den Admin, zusammen mit diesem Buch.',
+    lead: 'Deine Nachricht geht an die Person, die Eselsohr betreibt, zusammen mit diesem Buch.',
     reasons: {
       text: 'Text fehlt oder ist abgeschnitten',
       images: 'Bilder fehlen oder sind kaputt',
@@ -246,15 +253,15 @@ export const de: Messages = {
     messageLabel: 'Details (optional)',
     messagePlaceholder: 'Die zweite Hälfte des Artikels fehlt.',
     send: 'Feedback senden',
-    sentTitle: 'Danke, das ist beim Admin angekommen.',
+    sentTitle: 'Danke, deine Nachricht ist unterwegs.',
     sentText: 'Solche Hinweise helfen, Seiten besser zu lesen. Du kannst das Buch trotzdem senden oder herunterladen.',
   },
   signin: {
-    eyebrow: 'anmelden · ohne passwort',
+    eyebrow: 'ohne passwort',
     title: 'Anmelden',
     lead: {
-      all: 'Nutze Telegram, Google oder deine E-Mail-Adresse. Mit Telegram bekommst du dasselbe Konto wie im Bot, mit derselben Kindle-Adresse und demselben Verlauf.',
-      telegram: 'Nutze Telegram oder deine E-Mail-Adresse. Mit Telegram bekommst du dasselbe Konto wie im Bot, mit derselben Kindle-Adresse und demselben Verlauf.',
+      all: 'Nutze Telegram, Google oder deine E-Mail-Adresse. Mit Telegram bekommst du dasselbe Konto wie im Bot, mit derselben Kindle-Adresse und derselben Bibliothek.',
+      telegram: 'Nutze Telegram oder deine E-Mail-Adresse. Mit Telegram bekommst du dasselbe Konto wie im Bot, mit derselben Kindle-Adresse und derselben Bibliothek.',
       google: 'Nutze Google oder deine E-Mail-Adresse.',
       email: 'Wir mailen dir einen Code. Ganz ohne Passwort.',
     },
@@ -274,7 +281,7 @@ export const de: Messages = {
     verifyRetry: 'Neuen Code anfordern',
   },
   setup: {
-    eyebrow: 'einrichtung · e-reader',
+    eyebrow: 'kindle · pocketbook',
     title: 'Richte deinen E-Reader ein',
     lead: 'Bücher kommen per E-Mail auf deinen E-Reader. Das dauert etwa zwei Minuten.',
     stepsLabel: 'Schritte der Einrichtung',
@@ -340,8 +347,10 @@ export const de: Messages = {
     },
   },
   history: {
-    eyebrow: 'verlauf · {n} bücher',
-    title: 'Verlauf',
+    count: '{n} Bücher',
+    countOne: '1 Buch',
+    countOf: '{n} von {total} Büchern',
+    title: 'Bibliothek',
     columns: { title: 'Titel', date: 'Datum', status: 'Status', actions: 'Aktionen' },
     empty: 'Noch keine Bücher.',
     emptyText: 'Füge deinen ersten Link ein, dann erscheint er hier.',
@@ -354,7 +363,7 @@ export const de: Messages = {
     shows: {
       all: 'Alle Bücher',
       kindle: 'An Kindle gesendet',
-      not_sent: 'Nicht gesendet',
+      not_sent: 'Bereit, nicht gesendet',
       failed: 'Fehlgeschlagen',
       paywalled: 'Paywall',
     },
@@ -363,10 +372,10 @@ export const de: Messages = {
     showAll: 'Alle Bücher zeigen',
   },
   settings: {
-    eyebrow: 'einstellungen',
+    eyebrow: 'e-reader · bücher · konto',
     title: 'Einstellungen',
     kindle: {
-      eyebrow: '01 / e-reader',
+      eyebrow: 'zustellung per e-mail',
       title: 'Dein E-Reader',
       none: 'Kein Kindle oder PocketBook eingerichtet.',
       otherReaders: 'Liest du auf etwas anderem als Kindle oder PocketBook? Keine Einrichtung nötig: Lade das EPUB eines Buchs herunter und kopier es auf deinen Reader.',
@@ -377,13 +386,13 @@ export const de: Messages = {
       change: 'Ändern oder entfernen',
     },
     books: {
-      eyebrow: '02 / bücher',
+      eyebrow: 'für neue bücher',
       title: 'Bücher',
       imageLinks: 'Bilder auf dem Kindle antippen und zoomen',
       imageLinksHelp: 'Ein Tipp auf ein Bild öffnet es in voller Größe. Gilt für Bücher, die ab jetzt entstehen.',
     },
     account: {
-      eyebrow: '03 / konto',
+      eyebrow: 'sprache · anmeldung · löschen',
       title: 'Konto',
       language: 'Sprache',
       languageHelp: 'Für diese Seite und den Telegram-Bot. Bücher behalten die Sprache des Artikels.',
@@ -396,23 +405,23 @@ export const de: Messages = {
       deleteAccount: 'Konto löschen',
       deleteTitle: 'Alles löschen?',
       deleteText:
-        'Das entfernt deine Anmeldemethoden, deine Kindle-Adresse und deinen Verlauf. Wenn du den Telegram-Bot mit demselben Konto nutzt, verschwinden auch dessen Daten. Bücher, die schon auf deinem Kindle sind, bleiben dort.',
+        'Das entfernt deine Anmeldemethoden, deine Kindle-Adresse und deine Bibliothek. Wenn du den Telegram-Bot mit demselben Konto nutzt, verschwinden auch dessen Daten. Bücher, die schon auf deinem Kindle sind, bleiben dort.',
       deleteConfirm: 'Alles löschen',
     },
   },
   privacy: {
-    eyebrow: 'datenschutz',
+    eyebrow: 'keine analyse · keine werbung',
     title: 'Datenschutz',
     lead: 'Was Eselsohr speichert, warum und wie lange.',
     updated: 'Oktober 2026',
     sections: {
       what: {
         title: 'Was gespeichert wird',
-        text: 'Deine Anmeldemethoden (Telegram-ID, Google-ID und E-Mail-Adresse, oder die Adresse, mit der du dich angemeldet hast), deine Kindle-Adresse, deine Einstellungen und ein Verlauf der gesendeten Links mit dem Titel jedes Buchs. Links und Titel bleiben gespeichert, damit du deinen Verlauf siehst und ein Buch erneut senden kannst.',
+        text: 'Deine Anmeldemethoden (Telegram-ID, Google-ID und E-Mail-Adresse, oder die Adresse, mit der du dich angemeldet hast), deine Kindle-Adresse, deine Einstellungen und die gesendeten Links mit dem Titel jedes Buchs. Sie bleiben gespeichert, damit du sie in deiner Bibliothek siehst und ein Buch erneut senden kannst.',
       },
       books: {
         title: 'Die Bücher',
-        text: 'Die EPUB-Dateien bleiben auf dem Server, damit du sie herunterladen oder erneut senden kannst. Der Server löscht die ältesten, wenn der Speicherplatz knapp wird. Wenn du dein Konto löschst, verschwinden Verlauf und Dateien.',
+        text: 'Die EPUB-Dateien bleiben auf dem Server, damit du sie herunterladen oder erneut senden kannst. Der Server löscht die ältesten, wenn der Speicherplatz knapp wird. Wenn du dein Konto löschst, verschwinden Bibliothek und Dateien.',
       },
       mail: {
         title: 'E-Mail',

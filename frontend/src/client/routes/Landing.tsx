@@ -8,8 +8,9 @@ import { checkLinks, LinkField } from '../components/LinkField';
 import { Eyebrow, PageHead, SectionHead } from '../components/Text';
 import { useI18n } from '../i18n';
 import { createBook, errorCode } from '../lib/api';
+import { usePageTitle } from '../lib/title';
 
-const STEPS = ['paste', 'bind', 'read'] as const;
+const STEPS = ['paste', 'make', 'read'] as const;
 const QUESTIONS = ['free', 'devices', 'sender', 'paywall', 'data'] as const;
 
 /**
@@ -18,6 +19,7 @@ const QUESTIONS = ['free', 'devices', 'sender', 'paywall', 'data'] as const;
  */
 export function Landing({ initialLink = '' }: { initialLink?: string }) {
   const { t, lang } = useI18n();
+  usePageTitle(null, true);
   const navigate = useNavigate();
   const [url, setUrl] = useState(initialLink);
   // What's wrong with the link itself, shown at the field until it changes

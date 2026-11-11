@@ -13,6 +13,7 @@ import { useRecentBooks, useRefreshBooks } from '../lib/books';
 import { formatDate } from '../lib/format';
 import { bookmarklet, MAX_LINKS } from '../lib/links';
 import { useMe } from '../lib/session';
+import { usePageTitle } from '../lib/title';
 
 interface Duplicate {
   book: Book;
@@ -34,6 +35,7 @@ interface Started {
  */
 export function Send({ initialLink = '' }: { initialLink?: string }) {
   const { t, lang } = useI18n();
+  usePageTitle(t('nav.send'));
   const me = useMe();
   const navigate = useNavigate();
   const refresh = useRefreshBooks();
@@ -253,7 +255,7 @@ export function Send({ initialLink = '' }: { initialLink?: string }) {
           action={
             books.length > 0 ? (
               <Link className="g1-link" to="/history">
-                {t('send.allHistory')} <IconArrowRight className="g1-icon g1-arrow" aria-hidden />
+                {t('send.library')} <IconArrowRight className="g1-icon g1-arrow" aria-hidden />
               </Link>
             ) : undefined
           }
