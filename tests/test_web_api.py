@@ -989,6 +989,8 @@ class ClientFilesTest(ApiCase):
         sample = c.get('/sample/en.html')
         self.assertIn("frame-ancestors 'self'", sample.headers['content-security-policy'])
         self.assertNotIn('script-src', sample.headers['content-security-policy'])
+        # The e-reader injects a <style> into the frame to lay the book out in pages
+        self.assertIn("'unsafe-inline'", sample.headers['content-security-policy'])
         self.assertIn("frame-ancestors 'none'", c.get('/').headers['content-security-policy'])
         self.assertEqual(c.get('/manifest.webmanifest').headers['content-type'], 'application/manifest+json')
 

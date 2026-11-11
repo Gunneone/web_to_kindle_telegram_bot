@@ -32,8 +32,9 @@ SESSION_COOKIE = 'eselsohr_session'
 SESSION_MAX_AGE = 90 * 24 * 3600
 UNSAFE_METHODS = {'POST', 'PUT', 'PATCH', 'DELETE'}
 # The sample book on the start page is framed like a real preview: it may only show inside Eselsohr
-# and load its own stylesheet
-SAMPLE_CSP = ("default-src 'none'; style-src 'self'; img-src 'self' data:; frame-ancestors 'self'; "
+# and load its own stylesheet. Inline styles are allowed because the e-reader injects a <style> that
+# lays the book out in pages; without it the sample shows as one clipped page
+SAMPLE_CSP = ("default-src 'none'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; frame-ancestors 'self'; "
               "base-uri 'none'; form-action 'none'")
 mimetypes.add_type('application/manifest+json', '.webmanifest')
 INLINE_SCRIPT = re.compile(r'<script(?![^>]*\bsrc=)[^>]*>(.*?)</script>', re.S | re.I)

@@ -129,9 +129,14 @@ export function EReader({ src, title, children }: { src?: string; title: string;
         turn(dx < 0 ? 1 : -1);
       }
     };
-    // One page per wheel or trackpad gesture: turn once it has moved far enough, then wait for it to stop
+    // One page per wheel or trackpad gesture: turn once it has moved far enough, then ignore the rest
+    // of the gesture. A trackpad keeps sending ever smaller momentum events after the fingers lift, and
+    // a quick second swipe arrives before they stop, so a pause alone can't tell gestures apart. A new
+    // swipe shows as the movement picking up again after it had died down (or turning around).
     let wheeled = 0;
     let turned = false;
+    let peak = 0; // the biggest movement since the turn
+    let valley = Infinity; // the smallest since that peak
     let settle: number | undefined;
     const wheel = (event: WheelEvent) => {
       if (event.ctrlKey) return; // pinch to zoom
@@ -141,10 +146,27 @@ export function EReader({ src, title, children }: { src?: string; title: string;
         wheeled = 0;
         turned = false;
       }, 180);
-      if (turned) return;
-      wheeled += Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
+      const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? width() : 1; // lines, pages
+      const delta = (Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY) * unit;
+      const size = Math.abs(delta);
+      if (turned) {
+        const reversed = delta !== 0 && Math.sign(delta) !== Math.sign(wheeled);
+        const pickedUp = valley <= peak / 2 && size >= valley * 2 + 4;
+        if (!reversed && !pickedUp) {
+          if (size > peak) {
+            peak = size;
+            valley = Infinity;
+          } else valley = Math.min(valley, size);
+          return;
+        }
+        turned = false;
+        wheeled = 0;
+      }
+      wheeled += delta;
       if (Math.abs(wheeled) > 40) {
         turned = true;
+        peak = size;
+        valley = Infinity;
         turn(wheeled > 0 ? 1 : -1);
       }
     };
