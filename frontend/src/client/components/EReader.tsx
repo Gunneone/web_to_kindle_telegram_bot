@@ -9,7 +9,7 @@ const WORDS_PER_MINUTE = 230; // as the server counts reading time
  * is half a gap on either side of every page, so a page is exactly one screen wide.
  */
 const PAGED_CSS = `
-html { height: 100%; overflow: hidden; touch-action: pan-y pinch-zoom; }
+html { height: 100%; overflow: hidden; touch-action: pan-y pinch-zoom; overscroll-behavior: none; }
 body {
   box-sizing: border-box; height: 100%; margin: 0; padding: 16px;
   column-width: calc(100vw - 32px); column-gap: 32px; column-fill: auto;
@@ -138,13 +138,31 @@ export function EReader({ src, title, children }: { src?: string; title: string;
     let peak = 0; // the biggest movement since the turn
     let valley = Infinity; // the smallest since that peak
     let settle: number | undefined;
+    // The page around the reader stands still while the reader takes a gesture. Firefox (and browsers
+    // built on it, like Zen) sends a trackpad gesture over a frame that can't scroll on to the page,
+    // and preventDefault in the frame doesn't always stop that, so the page crept along with every
+    // swipe. The page keeps room for its scrollbar (scrollbar-gutter), so nothing moves sideways.
+    const outer = document.documentElement;
+    let held: string | null = null; // the page's own overflow, while the reader holds it
+    const hold = () => {
+      if (held !== null) return;
+      held = outer.style.overflow;
+      outer.style.overflow = 'hidden';
+    };
+    const release = () => {
+      if (held === null) return;
+      outer.style.overflow = held;
+      held = null;
+    };
     const wheel = (event: WheelEvent) => {
       if (event.ctrlKey) return; // pinch to zoom
       event.preventDefault();
+      hold();
       window.clearTimeout(settle);
       settle = window.setTimeout(() => {
         wheeled = 0;
         turned = false;
+        release();
       }, 180);
       const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? width() : 1; // lines, pages
       const delta = (Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY) * unit;
@@ -180,6 +198,7 @@ export function EReader({ src, title, children }: { src?: string; title: string;
     doc.addEventListener('wheel', wheel, { passive: false });
     return () => {
       window.clearTimeout(settle);
+      release();
       win.removeEventListener('resize', resize);
       win.removeEventListener('scroll', scroll);
       doc.removeEventListener('click', click);
