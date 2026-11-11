@@ -54,7 +54,7 @@ function KindleSection({ me }: { me: Me }) {
             </div>
           </>
         )}
-        <p className="m-0 text-sm text-muted">{t('settings.kindle.otherReaders')}</p>
+        <p className="mb-0 text-sm text-muted">{t('settings.kindle.otherReaders')}</p>
       </div>
     </section>
   );
@@ -161,7 +161,7 @@ function AccountSection({ me }: { me: Me }) {
         <div className="flex flex-wrap gap-2">
           {connectable.map((provider) => (
             <a key={provider} className="g1-btn" href={signInUrl(provider, '/settings')}>
-              {t('settings.account.connect')} {t(`settings.account.providers.${provider}`)}
+              {t('settings.account.connect', { provider: t(`settings.account.providers.${provider}`) })}
             </a>
           ))}
           {!me.providers.includes('email') && !connectingEmail && (

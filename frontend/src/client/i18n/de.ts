@@ -317,7 +317,7 @@ export const de: Messages = {
       amazonLink: 'Amazon-Einstellungen öffnen',
       noSender: 'Die Absenderadresse ist auf diesem Server nicht eingerichtet.',
       next: 'Erledigt, weiter',
-      whose: 'Sie gehört zu Eselsohr. Eselsohr ist ein gunne.one-Projekt, deshalb kommen die Bücher von {domain}.',
+      whose: 'Diese Adresse gehört zu Eselsohr, einem gunne.one-Projekt. Deshalb kommen die Bücher von {domain}.',
       checkedNext: 'Du musst dir noch nicht sicher sein: Das Testbuch im nächsten Schritt zeigt, ob es geklappt hat.',
     },
     test: {
@@ -403,7 +403,7 @@ export const de: Messages = {
       signedInAs: 'Angemeldet als',
       telegramName: '{name} bei Telegram',
       signedInWith: 'Anmeldemethoden',
-      connect: 'Verbinden',
+      connect: '{provider} verbinden',
       connected: 'Verbunden',
       providers: { telegram: 'Telegram', google: 'Google', email: 'E-Mail' },
       connectEmail: 'E-Mail-Adresse verbinden',

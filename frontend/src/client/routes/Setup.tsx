@@ -261,7 +261,7 @@ function AddressStep({
 
         {(device === 'kindle' || device === 'pocketbook') && (
           <>
-            <p className="m-0 text-muted">
+            <p className="mb-0 text-muted">
               {t(device === 'kindle' ? 'setup.address.kindleHint' : 'setup.address.pocketbookHint')}
               {device === 'kindle' && (
                 <>
@@ -383,12 +383,12 @@ function SenderStep({
           <Callout tone="warning">{t('setup.sender.noSender')}</Callout>
         )}
         {me.sender_email && (
-          <p className="m-0 text-sm text-muted">
+          <p className="mb-0 text-sm text-muted">
             {t('setup.sender.whose', { domain: me.sender_email.split('@')[1] ?? '' })}
           </p>
         )}
         {!pocketbook && (
-          <p className="m-0">
+          <p className="mb-0">
             <a className="g1-link inline-flex items-center gap-1" href={me.amazon_settings_url} target="_blank" rel="noopener noreferrer">
               {t('setup.sender.amazonLink')} <IconArrowUpRight className="g1-icon" aria-hidden />
             </a>
@@ -400,7 +400,7 @@ function SenderStep({
             {t('setup.sender.next')} <IconArrowRight className="g1-icon g1-arrow" aria-hidden />
           </button>
         </div>
-        <p id="setup-sender-next" className="m-0 text-sm text-muted">
+        <p id="setup-sender-next" className="mb-0 text-sm text-muted">
           {t('setup.sender.checkedNext')}
         </p>
       </div>
@@ -480,7 +480,7 @@ function TestStep({ me, onBack, onFix, onDone }: { me: Me; onBack: () => void; o
             {t('setup.test.skip')}
           </Link>
         </div>
-        <p id="setup-test-skip" className="m-0 text-sm text-muted">
+        <p id="setup-test-skip" className="mb-0 text-sm text-muted">
           {t('setup.test.skipHelp')}
         </p>
       </div>

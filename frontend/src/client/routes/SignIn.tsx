@@ -59,7 +59,7 @@ export function SignIn() {
             )}
           </div>
         )}
-        {(providers?.telegram || providers?.google) && <p className="g1-eyebrow m-0">{t('common.or')}</p>}
+        {(providers?.telegram || providers?.google) && <p className="g1-eyebrow mb-0">{t('common.or')}</p>}
         <EmailSignIn next={next} onDone={() => void reset()} />
       </div>
     </div>

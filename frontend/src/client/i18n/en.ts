@@ -318,7 +318,7 @@ export const en = {
       amazonLink: 'Open Amazon settings',
       noSender: 'The sender address is not configured on this server.',
       next: 'Done, continue',
-      whose: 'It belongs to Eselsohr. Eselsohr is a gunne.one project, so books come from {domain}.',
+      whose: 'This address belongs to Eselsohr, a gunne.one project, so books come from {domain}.',
       checkedNext: 'No need to be sure yet: the test book in the next step shows whether it worked.',
     },
     test: {
@@ -404,7 +404,7 @@ export const en = {
       signedInAs: 'Signed in as',
       telegramName: '{name} on Telegram',
       signedInWith: 'Sign-in methods',
-      connect: 'Connect',
+      connect: 'Connect {provider}',
       connected: 'Connected',
       providers: { telegram: 'Telegram', google: 'Google', email: 'Email' },
       connectEmail: 'Connect an email address',
