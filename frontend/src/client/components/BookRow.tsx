@@ -1,6 +1,6 @@
 import { useMutation } from '@tanstack/react-query';
 import { IconArrowUpRight, IconDownload, IconRefresh, IconSend, IconTrash } from '@tabler/icons-react';
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import { Link, useLocation } from 'react-router';
 import { useI18n, type MessageKey } from '../i18n';
 import { deleteBook, downloadUrl, errorCode, type Book, type Stage, type Target } from '../lib/api';
@@ -352,7 +352,15 @@ export function BookRow(props: {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1 basis-64">
           <BookTitle book={book} />
-          <p className="g1-meta mb-0 mt-1">{meta.join(' · ')}</p>
+          {/* Each part stays on one line, so a date never breaks in the middle on a phone */}
+          <p className="g1-meta mb-0 mt-1">
+            {meta.map((part, index) => (
+              <Fragment key={index}>
+                {index > 0 && ' · '}
+                <span className="whitespace-nowrap">{part}</span>
+              </Fragment>
+            ))}
+          </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <BookBadges book={book} />

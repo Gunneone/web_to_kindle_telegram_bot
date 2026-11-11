@@ -48,7 +48,8 @@ export function Landing({ initialLink = '' }: { initialLink?: string }) {
 
   return (
     <div className="g1-container">
-      <div className="grid items-center gap-10 md:grid-cols-[minmax(0,1fr)_minmax(0,300px)]">
+      {/* The e-reader starts level with the heading, so an error under the form can't push it down */}
+      <div className="grid items-start gap-10 md:grid-cols-[minmax(0,1fr)_minmax(0,300px)]">
         <div>
           <PageHead eyebrow={t('home.eyebrow')} title={t('home.title')} scribble={t('home.scribble')} lead={t('home.lead')} />
           <form onSubmit={submit} className="g1-stack">
@@ -63,14 +64,14 @@ export function Landing({ initialLink = '' }: { initialLink?: string }) {
             <div className="flex flex-wrap gap-3">
               <button
                 type="submit"
-                className="g1-btn g1-btn--primary g1-btn--lg"
+                className="g1-btn g1-btn--primary g1-btn--lg max-sm:flex-auto"
                 disabled={!url.trim() || create.isPending}
                 aria-busy={create.isPending || undefined}
               >
                 {create.isPending ? t('home.try.making') : t('home.try.submit')}
                 <IconArrowRight className="g1-icon g1-arrow" aria-hidden />
               </button>
-              <Link to={signIn} className="g1-btn g1-btn--lg">
+              <Link to={signIn} className="g1-btn g1-btn--lg max-sm:flex-auto">
                 {t('home.signIn')}
               </Link>
             </div>
@@ -78,7 +79,7 @@ export function Landing({ initialLink = '' }: { initialLink?: string }) {
             <ErrorCallout code={linkError ? null : serverError} />
           </form>
         </div>
-        <div className="flex flex-col items-center gap-3">
+        <div className="flex flex-col items-center gap-3 md:pt-16">
           <EReader src={`/sample/${lang}.html`} title={t('home.sample.title')} />
           <p className="m-0 max-w-[300px] text-center text-xs text-muted">{t('home.sample.caption')}</p>
         </div>

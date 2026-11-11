@@ -91,7 +91,7 @@ export function History() {
               />
             </div>
           </div>
-          <div className="basis-44">
+          <div className="grow basis-44 sm:grow-0">
             <label className="g1-label" htmlFor="history-show">
               {t('history.show')}
             </label>
@@ -151,11 +151,18 @@ export function History() {
             ))}
           </ul>
           <div className="hidden overflow-x-auto lg:block">
-            <table className="g1-table">
+            {/* Fixed column widths, so an inline question ("delete?") in one row doesn't shift every column */}
+            <table className="g1-table table-fixed">
+              <colgroup>
+                <col />
+                <col className="w-36" />
+                <col className="w-44" />
+                <col className="w-76" />
+              </colgroup>
               <thead>
                 <tr>
                   <th>{t('history.columns.title')}</th>
-                  <th>{t('history.columns.date')}</th>
+                  <th className="g1-num">{t('history.columns.date')}</th>
                   <th>{t('history.columns.status')}</th>
                   <th>{t('history.columns.actions')}</th>
                 </tr>
@@ -165,7 +172,7 @@ export function History() {
                   const place = placeOf(book);
                   return (
                     <tr key={book.id}>
-                      <td className="max-w-[28rem]">
+                      <td>
                         <BookTitle book={book} />
                         <span className="g1-meta">
                           {book.host}
@@ -179,7 +186,7 @@ export function History() {
                       <td>
                         <BookBadges book={book} />
                         {place === 'kindle' && hint && (
-                          <span className="mt-1 block whitespace-nowrap">
+                          <span className="mt-1 block">
                             <NotArrivedLink book={book} />
                           </span>
                         )}

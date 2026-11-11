@@ -33,13 +33,13 @@ export function SignIn() {
         {(providers?.telegram || providers?.google) && (
           <div className="flex flex-col gap-3 sm:flex-row">
             {providers.telegram && (
-              <a className="g1-btn g1-btn--lg" href={signInUrl('telegram', next)}>
+              <a className="g1-btn g1-btn--lg sm:flex-1" href={signInUrl('telegram', next)}>
                 <IconBrandTelegram className="g1-icon" aria-hidden />
                 {t('signin.telegram')}
               </a>
             )}
             {providers.google && (
-              <a className="g1-btn g1-btn--lg" href={signInUrl('google', next)}>
+              <a className="g1-btn g1-btn--lg sm:flex-1" href={signInUrl('google', next)}>
                 <IconBrandGoogle className="g1-icon" aria-hidden />
                 {t('signin.google')}
               </a>

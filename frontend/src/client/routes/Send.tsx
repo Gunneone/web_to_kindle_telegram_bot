@@ -1,5 +1,5 @@
 import { useMutation } from '@tanstack/react-query';
-import { IconArrowRight, IconBookmark, IconBrandTelegram, IconDeviceMobile, IconSend } from '@tabler/icons-react';
+import { IconArrowRight, IconArrowUpRight, IconBookmark, IconBrandTelegram, IconDeviceMobile, IconSend } from '@tabler/icons-react';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { BookRow } from '../components/BookRow';
@@ -304,7 +304,7 @@ function Shortcuts() {
           <IconBookmark className="g1-icon text-primary" aria-hidden />
           <h3 className="g1-card__title m-0">{t('shortcuts.bookmarklet.title')}</h3>
           <p className="g1-card__text m-0">{t('shortcuts.bookmarklet.text')}</p>
-          <div className="g1-card__foot">
+          <div className="g1-card__foot mt-auto">
             <a
               ref={link}
               className="g1-btn g1-btn--sm esel-bookmarklet"
@@ -326,14 +326,15 @@ function Shortcuts() {
           <IconDeviceMobile className="g1-icon text-primary" aria-hidden />
           <h3 className="g1-card__title m-0">{t('shortcuts.phone.title')}</h3>
           <p className="g1-card__text m-0">{t('shortcuts.phone.text')}</p>
+          {/* No action here: adding to the home screen happens in the browser menu */}
         </div>
         <div className="g1-card">
           <IconBrandTelegram className="g1-icon text-primary" aria-hidden />
           <h3 className="g1-card__title m-0">{t('shortcuts.bot.title')}</h3>
           <p className="g1-card__text m-0">{t('shortcuts.bot.text')}</p>
-          <div className="g1-card__foot">
-            <a className="g1-link" href="https://t.me/SubstackKindleBot" target="_blank" rel="noopener noreferrer">
-              {t('shortcuts.bot.action')}
+          <div className="g1-card__foot mt-auto">
+            <a className="g1-btn g1-btn--sm" href="https://t.me/SubstackKindleBot" target="_blank" rel="noopener noreferrer">
+              {t('shortcuts.bot.action')} <IconArrowUpRight className="g1-icon" aria-hidden />
             </a>
           </div>
         </div>
