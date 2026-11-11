@@ -132,6 +132,9 @@ def create_app(settings: config.Settings | None = None) -> FastAPI:
             headers = {'Cache-Control': 'public, max-age=3600'}
             if path.startswith('sample/') and path.endswith('.html'):
                 headers['Content-Security-Policy'] = SAMPLE_CSP
+                # Its CSP decides whether the e-reader can lay it out in pages, so a browser must not keep
+                # an old copy (and the old policy with it) for an hour; it is a few kilobytes
+                headers['Cache-Control'] = 'no-cache'
             return FileResponse(candidate, headers=headers)
         return FileResponse(dist_root / 'index.html', headers={'Cache-Control': 'no-cache'})
 
