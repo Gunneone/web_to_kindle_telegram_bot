@@ -37,7 +37,7 @@ export function Verify() {
 
   const error = (token ? verify.error : new ApiError('EXPIRED', 400)) as ApiError | null;
   return (
-    <div className="g1-container g1-container--prose">
+    <div className="g1-container esel-column">
       <PageHead
         eyebrow={t('signin.eyebrow')}
         title={error ? t('signin.verifyFailed') : t('signin.verifying')}

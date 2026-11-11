@@ -45,7 +45,7 @@ function Wizard({ me, initial }: { me: Me; initial: Step }) {
 
   const index = (NUMBERED as readonly Step[]).indexOf(step);
   return (
-    <div className="g1-container g1-container--prose">
+    <div className="g1-container esel-column">
       <PageHead eyebrow={t('setup.eyebrow')} title={t('setup.title')} lead={t('setup.lead')} />
       {index >= 0 && (
         <ol className="m-0 mb-8 flex list-none gap-2 p-0" aria-label={t('setup.stepsLabel')}>
@@ -222,7 +222,7 @@ function AddressStep({
           </div>
         )}
         <ErrorCallout code={errorCode(save.error ?? store.error ?? remove.error)} />
-        <div className="flex flex-wrap gap-2">
+        <div className="esel-actions flex flex-wrap gap-2">
           <button type="submit" className="g1-btn g1-btn--primary" disabled={!address.trim() || save.isPending}>
             {t('setup.address.next')} <IconArrowRight className="g1-icon g1-arrow" aria-hidden />
           </button>
@@ -295,25 +295,28 @@ function SenderStep({
         {t(pocketbook ? 'setup.sender.pocketbookText' : 'setup.sender.kindleText')}
       </StepHead>
       <div className="g1-stack">
-        {me.sender_email ? (
-          <div className="flex flex-wrap items-center gap-2">
-            <code className="g1-mono select-all break-all bg-surface-2 px-3 py-2">{me.sender_email}</code>
-            <button type="button" className="g1-btn g1-btn--sm" onClick={() => void copy()}>
-              {copied ? <IconCheck className="g1-icon" aria-hidden /> : <IconCopy className="g1-icon" aria-hidden />}
-              {copied ? t('common.copied') : t('common.copy')}
-            </button>
-          </div>
-        ) : (
-          <Callout tone="warning">{t('setup.sender.noSender')}</Callout>
-        )}
-        {!pocketbook && (
-          <p className="m-0">
-            <a className="g1-link inline-flex items-center gap-1" href={me.amazon_settings_url} target="_blank" rel="noopener noreferrer">
-              {t('setup.sender.amazonLink')} <IconArrowUpRight className="g1-icon" aria-hidden />
-            </a>
-          </p>
-        )}
-        <div className="flex flex-wrap gap-2">
+        {/* The address to copy and the place to paste it belong together */}
+        <div>
+          {me.sender_email ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <code className="g1-mono select-all break-all bg-surface-2 px-3 py-2">{me.sender_email}</code>
+              <button type="button" className="g1-btn g1-btn--sm" onClick={() => void copy()}>
+                {copied ? <IconCheck className="g1-icon" aria-hidden /> : <IconCopy className="g1-icon" aria-hidden />}
+                {copied ? t('common.copied') : t('common.copy')}
+              </button>
+            </div>
+          ) : (
+            <Callout tone="warning">{t('setup.sender.noSender')}</Callout>
+          )}
+          {!pocketbook && (
+            <p className="m-0 mt-3">
+              <a className="g1-link inline-flex items-center gap-1" href={me.amazon_settings_url} target="_blank" rel="noopener noreferrer">
+                {t('setup.sender.amazonLink')} <IconArrowUpRight className="g1-icon" aria-hidden />
+              </a>
+            </p>
+          )}
+        </div>
+        <div className="esel-actions flex flex-wrap gap-2">
           <BackButton onClick={onBack} />
           <button type="button" className="g1-btn g1-btn--primary" onClick={onDone}>
             {t('setup.sender.next')} <IconArrowRight className="g1-icon g1-arrow" aria-hidden />
@@ -382,7 +385,7 @@ function TestStep({ me, onBack, onFix, onDone }: { me: Me; onBack: () => void; o
           </div>
         )}
         <ErrorCallout code={errorCode(test.error ?? arrived.error)} />
-        <div className="flex flex-wrap gap-2">
+        <div className="esel-actions flex flex-wrap gap-2">
           <BackButton onClick={onBack} />
           <button
             type="button"
@@ -405,7 +408,7 @@ function DoneStep({ onChange }: { onChange: () => void }) {
       <Callout tone="success" title={t('setup.done.title')}>
         {t('setup.done.text')}
       </Callout>
-      <div className="flex flex-wrap gap-2">
+      <div className="esel-actions flex flex-wrap gap-2">
         <Link to="/" className="g1-btn g1-btn--primary">
           {t('setup.done.action')} <IconArrowRight className="g1-icon g1-arrow" aria-hidden />
         </Link>

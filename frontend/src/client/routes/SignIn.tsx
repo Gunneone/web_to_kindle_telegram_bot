@@ -28,27 +28,27 @@ export function SignIn() {
   // Only name the ways in that are switched on
   const lead = providers?.telegram ? (providers.google ? 'all' : 'telegram') : providers?.google ? 'google' : 'email';
   return (
-    <div className="g1-container g1-container--prose">
+    <div className="g1-container esel-column">
       <PageHead eyebrow={t('signin.eyebrow')} title={t('signin.title')} lead={session.isPending ? undefined : t(`signin.lead.${lead}`)} />
       <div className="g1-stack">
         <ErrorCallout code={params.get('error')} />
         {(providers?.telegram || providers?.google) && (
           <div className="flex flex-col gap-3 sm:flex-row">
             {providers.telegram && (
-              <a className="g1-btn g1-btn--lg" href={signInUrl('telegram', next)}>
+              <a className="g1-btn g1-btn--lg sm:flex-1" href={signInUrl('telegram', next)}>
                 <IconBrandTelegram className="g1-icon" aria-hidden />
                 {t('signin.telegram')}
               </a>
             )}
             {providers.google && (
-              <a className="g1-btn g1-btn--lg" href={signInUrl('google', next)}>
+              <a className="g1-btn g1-btn--lg sm:flex-1" href={signInUrl('google', next)}>
                 <IconBrandGoogle className="g1-icon" aria-hidden />
                 {t('signin.google')}
               </a>
             )}
           </div>
         )}
-        {(providers?.telegram || providers?.google) && <p className="g1-eyebrow m-0">{t('common.or')}</p>}
+        {(providers?.telegram || providers?.google) && <p className="esel-divider g1-eyebrow m-0">{t('common.or')}</p>}
         <EmailSignIn next={next} onDone={() => void reset()} />
       </div>
     </div>
