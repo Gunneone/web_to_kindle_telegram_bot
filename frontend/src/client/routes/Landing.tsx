@@ -1,6 +1,6 @@
 import { useMutation } from '@tanstack/react-query';
-import { IconArrowRight, IconBrandTelegram } from '@tabler/icons-react';
-import { useState, type FormEvent } from 'react';
+import { IconArrowRight, IconArrowUp, IconBrandTelegram } from '@tabler/icons-react';
+import { useState, type FormEvent, type MouseEvent } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { ErrorCallout } from '../components/Callout';
 import { EReader } from '../components/EReader';
@@ -117,6 +117,27 @@ export function Landing({ initialLink = '' }: { initialLink?: string }) {
           </a>
         </div>
       </section>
+
+      <section className="g1-section">
+        <SectionHead eyebrow={t('home.end.eyebrow')} title={t('home.end.title')} />
+        <p className="m-0 max-w-prose text-muted">{t('home.end.text')}</p>
+        <div className="mt-5">
+          <a className="g1-btn g1-btn--primary g1-btn--lg" href="#try-url" onClick={toLinkField}>
+            {t('home.end.action')}
+            <IconArrowUp className="g1-icon" aria-hidden />
+          </a>
+        </div>
+      </section>
     </div>
   );
+}
+
+/** Back up to the link field at the top, and into it. */
+function toLinkField(event: MouseEvent<HTMLAnchorElement>) {
+  const field = document.getElementById('try-url');
+  if (!field) return;
+  event.preventDefault();
+  const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  field.scrollIntoView({ behavior: still ? 'auto' : 'smooth', block: 'center' });
+  field.focus({ preventScroll: true });
 }

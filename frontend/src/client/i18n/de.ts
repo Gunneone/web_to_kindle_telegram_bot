@@ -50,6 +50,12 @@ export const de: Messages = {
       title: 'Beispielbuch: Eine umgeknickte Ecke',
       caption: 'Ein Beispielbuch. Tipp oder klick rechts zum Umblättern, oder wisch.',
     },
+    end: {
+      eyebrow: '03 / ausprobieren',
+      title: 'Hast du einen langen Text im Tab offen?',
+      text: 'Füg seinen Link oben ein. In ein paar Sekunden hast du ein Buch zum Anschauen, ganz ohne Konto.',
+      action: 'Link einfügen',
+    },
     faq: {
       eyebrow: '02 / fragen',
       title: 'Bevor du loslegst',
@@ -180,6 +186,8 @@ export const de: Messages = {
     sendToKindle: 'An Kindle senden',
     retry: 'Noch einmal versuchen',
     openOriginal: 'Original öffnen',
+    openOriginalOn: 'Original auf {host} öffnen',
+    newTab: '(öffnet in neuem Tab)',
     sendAgain: 'Erneut senden',
     sendAgainLabel: '„{title}“ erneut an dein Kindle senden',
     sendAgainTitle: 'Erneut an {email} senden?',

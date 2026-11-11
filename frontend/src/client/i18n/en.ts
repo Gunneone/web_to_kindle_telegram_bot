@@ -54,6 +54,12 @@ export const en = {
       title: 'Sample book: A corner folded down',
       caption: 'A sample book. Tap or click the right side to turn the page, or swipe.',
     },
+    end: {
+      eyebrow: '03 / try it',
+      title: 'Got a long read open in a tab?',
+      text: 'Paste its link at the top. You get a book to look at in a few seconds, no account needed.',
+      action: 'Paste a link',
+    },
     faq: {
       eyebrow: '02 / questions',
       title: 'Before you start',
@@ -181,6 +187,8 @@ export const en = {
     sendToKindle: 'Send to Kindle',
     retry: 'Try again',
     openOriginal: 'Open the original',
+    openOriginalOn: 'Open the original on {host}',
+    newTab: '(opens in a new tab)',
     sendAgain: 'Send again',
     sendAgainLabel: 'Send “{title}” to your Kindle again',
     sendAgainTitle: 'Send it to {email} again?',

@@ -822,6 +822,17 @@ class PreviewTest(BookTest):
         r = c.get(f"/api/books/{book['id']}/preview")
         self.assertEqual((r.status_code, r.json()['error']['code']), (500, 'PREVIEW_FAILED'))
 
+    def test_reading_time_of_an_older_book_comes_from_its_epub(self):
+        self.real_epub = True
+        c = self.signed_in()
+        book = self.built(c)
+        jobs.LIVE.clear()  # as after a restart: only the database is left
+        db.update_article(book['id'], words=None)  # a row from before the word count was kept
+        self.assertEqual(c.get(f"/api/books/{book['id']}").json()['book']['minutes'], 1)
+        self.assertEqual(db.get_article(book['id']).words, 7)  # the chapter's text, not the table of contents
+        os.remove(db.get_article(book['id']).epub_path)  # once counted, the time stays without the file
+        self.assertEqual(c.get(f"/api/books/{book['id']}").json()['book']['minutes'], 1)
+
 
 class FeedbackTest(BookTest):
     def setUp(self):

@@ -85,26 +85,33 @@ function useFrom(): FromState {
   return { from: location.pathname + location.search };
 }
 
-/** The book's title, opening it in Eselsohr, and a small link to the page it came from. */
+/** The book's title, opening it in Eselsohr. The page it came from is linked in the details line below (OriginalLink). */
 export function BookTitle({ book, className = '' }: { book: Book; className?: string }) {
-  const { t } = useI18n();
   const from = useFrom();
   return (
-    <span className={`flex min-w-0 items-center gap-2 ${className}`}>
+    <span className={`flex min-w-0 ${className}`}>
       <Link className="g1-link min-w-0 truncate font-medium" to={`/books/${book.id}`} state={from}>
         {book.title}
       </Link>
-      <a
-        className="shrink-0 text-muted hover:text-fg"
-        href={book.url}
-        target="_blank"
-        rel="noopener noreferrer"
-        aria-label={t('books.openOriginal')}
-        title={t('books.openOriginal')}
-      >
-        <IconArrowUpRight className="g1-icon" aria-hidden />
-      </a>
     </span>
+  );
+}
+
+/** "en.wikipedia.org ↗" in a book's details line: the page the book came from, in a new tab. */
+export function OriginalLink({ book }: { book: Book }) {
+  const { t } = useI18n();
+  return (
+    <a
+      className="inline-flex items-center gap-0.5 text-muted underline underline-offset-2 hover:text-fg"
+      href={book.url}
+      target="_blank"
+      rel="noopener noreferrer"
+      title={t('books.openOriginalOn', { host: book.host })}
+    >
+      {book.host}
+      <IconArrowUpRight className="g1-icon" aria-hidden />
+      <span className="g1-visually-hidden">{t('books.newTab')}</span>
+    </a>
   );
 }
 
@@ -316,12 +323,12 @@ export function BookActions({
       {deletable && (
         <button
           type="button"
-          className="g1-btn g1-btn--ghost g1-btn--sm g1-btn--icon"
+          className="g1-btn g1-btn--ghost g1-btn--sm"
           aria-label={t('books.deleteLabel', { title: book.title })}
-          title={t('books.delete')}
           onClick={() => setAsking('delete')}
         >
           <IconTrash className="g1-icon" aria-hidden />
+          {t('books.delete')}
         </button>
       )}
     </div>
@@ -340,7 +347,6 @@ export function BookRow(props: {
   const { t, lang } = useI18n();
   const hint = useArrivalHint();
   const meta = [
-    book.host,
     book.minutes ? t('books.readMinutes', { n: book.minutes }) : null,
     book.can_download ? formatSize(book.size, lang) : null,
     formatDate(book.created_at, lang),
@@ -352,7 +358,10 @@ export function BookRow(props: {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1 basis-64">
           <BookTitle book={book} />
-          <p className="g1-meta mb-0 mt-1">{meta.join(' · ')}</p>
+          <p className="g1-meta mb-0 mt-1">
+            <OriginalLink book={book} />
+            {meta.map((item) => ` · ${item}`).join('')}
+          </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <BookBadges book={book} />

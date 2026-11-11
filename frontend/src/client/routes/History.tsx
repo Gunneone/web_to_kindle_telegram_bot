@@ -2,7 +2,7 @@ import { useMutation } from '@tanstack/react-query';
 import { IconSearch } from '@tabler/icons-react';
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
-import { BookActions, BookBadges, BookRow, BookTitle, failureText, NotArrivedLink } from '../components/BookRow';
+import { BookActions, BookBadges, BookRow, BookTitle, failureText, NotArrivedLink, OriginalLink } from '../components/BookRow';
 import { ErrorCallout } from '../components/Callout';
 import { PageHead, Scribble } from '../components/Text';
 import { UnconfirmedCallout } from '../components/Unconfirmed';
@@ -165,10 +165,10 @@ export function History() {
                   const place = placeOf(book);
                   return (
                     <tr key={book.id}>
-                      <td className="max-w-[28rem]">
+                      <td className="w-full max-w-0">
                         <BookTitle book={book} />
                         <span className="g1-meta">
-                          {book.host}
+                          <OriginalLink book={book} />
                           {book.status === 'processing' && book.stage ? ` · ${t(`books.stage.${book.stage}`)}` : ''}
                         </span>
                         {(place === 'failed' || place === 'interrupted') && (
