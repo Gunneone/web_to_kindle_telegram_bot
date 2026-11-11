@@ -12,6 +12,9 @@ import { useMe, useSetUser } from '../lib/session';
 import { usePageTitle } from '../lib/title';
 
 type Step = 'address' | 'sender' | 'test' | 'done';
+/** What the first step asks before anything else; 'other' needs no setup at all */
+type Device = 'kindle' | 'pocketbook' | 'other';
+const DEVICES: Device[] = ['kindle', 'pocketbook', 'other'];
 const NUMBERED = ['address', 'sender', 'test'] as const;
 
 /** Where someone left off: the server remembers the address, the test book and whether it arrived. */
@@ -23,11 +26,12 @@ function firstStep(me: Me, asked: string | null): Step {
 }
 
 /**
- * Setting up an e-reader, one step at a time: your address, approve our sender, a test book. Each step
- * survives a reload, so going off to Amazon and coming back picks up where it was. Kindle and PocketBook
- * take the same path (both get books by email); only the wording of the sender and test steps follows the
- * address, since approving a sender works differently on each. Any other reader needs no setup: every book
- * can be downloaded. A saved address is used until it is removed, which only the address step does.
+ * Setting up an e-reader, one step at a time: which reader and its address, approve our sender, a test
+ * book. Each step survives a reload, so going off to Amazon and coming back picks up where it was. The
+ * first step asks for the reader before anything else and shows only what fits it: Kindle and PocketBook
+ * take the same path (both get books by email), and the sender and test steps follow the saved address,
+ * since approving a sender works differently on each. Any other reader needs no setup: every book can be
+ * downloaded. A saved address is used until it is removed, which only the address step does.
  */
 export function Setup() {
   const me = useMe();
@@ -50,22 +54,37 @@ function Wizard({ me, initial }: { me: Me; initial: Step }) {
       {index >= 0 && (
         <ol className="m-0 mb-8 flex list-none gap-2 p-0" aria-label={t('setup.stepsLabel')}>
           {NUMBERED.map((name, i) => {
-            const reachable = i < index;
-            const label = `${i + 1} · ${t(`setup.steps.${name}`)}`;
+            // Done, current and still to come differ in more than color: a check, weight and a thicker line
+            const state = i < index ? 'done' : i === index ? 'current' : 'todo';
+            const label = (
+              <>
+                {state === 'done' ? <IconCheck className="g1-icon" aria-hidden /> : <span aria-hidden>{i + 1} ·</span>}
+                {t(`setup.steps.${name}`)}
+                <span className="g1-visually-hidden">, {t(`setup.stepState.${state}`)}</span>
+              </>
+            );
             return (
               <li
                 key={name}
-                aria-current={i === index ? 'step' : undefined}
-                className={`flex-1 border-t-2 pt-2 font-mono text-xs uppercase tracking-wider ${
-                  i < index ? 'border-primary text-muted' : i === index ? 'border-accent text-fg' : 'border-line text-subtle'
+                aria-current={state === 'current' ? 'step' : undefined}
+                className={`flex-1 font-mono text-xs uppercase tracking-wider ${
+                  state === 'done'
+                    ? 'border-t-2 border-primary pt-2 text-muted'
+                    : state === 'current'
+                      ? 'border-t-4 border-accent pt-1.5 font-semibold text-fg'
+                      : 'border-t-2 border-dashed border-line pt-2 text-subtle'
                 }`}
               >
-                {reachable ? (
-                  <button type="button" className="cursor-pointer border-0 bg-transparent p-0 font-mono text-xs uppercase tracking-wider text-muted underline-offset-4 hover:underline" onClick={() => setStep(name)}>
+                {state === 'done' ? (
+                  <button
+                    type="button"
+                    className="inline-flex cursor-pointer items-center gap-1 border-0 bg-transparent p-0 font-mono text-xs uppercase tracking-wider text-muted underline-offset-4 hover:underline"
+                    onClick={() => setStep(name)}
+                  >
                     {label}
                   </button>
                 ) : (
-                  label
+                  <span className="inline-flex items-center gap-1">{label}</span>
                 )}
               </li>
             );
@@ -110,6 +129,14 @@ function BackButton({ onClick }: { onClick: () => void }) {
   );
 }
 
+/** Which reader an address belongs to, from its domain; null while it could be either */
+function deviceOf(address: string): Exclude<Device, 'other'> | null {
+  const value = address.trim().toLowerCase();
+  if (/@pbsync\.com$/.test(value)) return 'pocketbook';
+  if (/@(free\.)?kindle\.(com|cn)$/.test(value)) return 'kindle';
+  return null;
+}
+
 function AddressStep({
   me,
   onDone,
@@ -121,11 +148,12 @@ function AddressStep({
   const { t } = useI18n();
   const setUser = useSetUser();
   const [address, setAddress] = useState(me.kindle_email ?? '');
+  // The reader comes first, so only what fits it shows: a saved address already says which one it is
+  const [device, setDevice] = useState<Device | null>(me.device);
   const [storeSaved, flashStore] = useSavedFlash();
   const [confirmingRemove, setConfirmingRemove] = useState(false);
   const [removed, setRemoved] = useState<string | null>(null);
-  // The Amazon store only matters for a Kindle; a PocketBook address ends in @pbsync.com
-  const pocketbook = /@pbsync\.com\s*$/i.test(address);
+  const typed = deviceOf(address);
   const save = useMutation({
     mutationFn: (value: string) => updateMe({ kindle_email: value }),
     onSuccess: ({ user }) => {
@@ -168,33 +196,44 @@ function AddressStep({
       )}
       <StepHead title={t('setup.address.title')}>{t('setup.address.text')}</StepHead>
       <div className="g1-stack">
-        <ul className="m-0 list-disc pl-5 text-muted">
-          <li className="mb-2">
-            {t('setup.address.kindleHint')}{' '}
-            <a className="g1-link inline-flex items-center gap-1" href={me.amazon_devices_url} target="_blank" rel="noopener noreferrer">
-              {t('setup.address.findLink')} <IconArrowUpRight className="g1-icon" aria-hidden />
-            </a>
-          </li>
-          <li className="mb-2">{t('setup.address.pocketbookHint')}</li>
-          <li>{t('setup.address.otherHint')}</li>
-        </ul>
-        <div>
-          <label className="g1-label" htmlFor="setup-address">
-            {t('setup.address.label')}
-          </label>
-          <input
-            id="setup-address"
-            className="g1-input"
-            type="email"
-            autoComplete="off"
-            autoFocus
-            placeholder={t('setup.address.placeholder')}
-            value={address}
-            onChange={(event) => setAddress(event.target.value)}
-            required
-          />
-        </div>
-        {!pocketbook && (
+        <fieldset className="m-0 border-0 p-0">
+          <legend className="g1-label">{t('setup.device.label')}</legend>
+          <div className="grid gap-2 sm:grid-cols-3">
+            {DEVICES.map((name) => (
+              <label
+                key={name}
+                className="g1-chamfer flex cursor-pointer items-start gap-3 p-3 [--g1-c:var(--g1-cut-sm)] [--g1-edge:var(--g1-border)] has-checked:[--g1-edge-w:2px] has-checked:[--g1-edge:var(--g1-primary)]"
+              >
+                <input
+                  type="radio"
+                  name="setup-device"
+                  className="mt-1 size-4"
+                  value={name}
+                  checked={device === name}
+                  autoFocus={!device && name === 'kindle'}
+                  onChange={() => setDevice(name)}
+                />
+                <span>
+                  <span className="block font-medium">{t(`setup.device.${name}`)}</span>
+                  <span className="block text-sm text-muted">{t(`setup.device.${name}Help`)}</span>
+                </span>
+              </label>
+            ))}
+          </div>
+        </fieldset>
+
+        {device === 'other' && (
+          <Callout tone="info" title={t('setup.device.otherTitle')}>
+            {t('setup.device.otherText')}
+            <div className="mt-3">
+              <Link to="/" className="g1-btn g1-btn--sm g1-btn--primary">
+                {t('setup.device.otherAction')} <IconArrowRight className="g1-icon g1-arrow" aria-hidden />
+              </Link>
+            </div>
+          </Callout>
+        )}
+
+        {device === 'kindle' && (
           <div>
             <div className="flex flex-wrap items-baseline justify-between gap-2">
               <label className="g1-label" htmlFor="setup-store">
@@ -221,12 +260,51 @@ function AddressStep({
             </span>
           </div>
         )}
-        <ErrorCallout code={errorCode(save.error ?? store.error ?? remove.error)} />
-        <div className="esel-actions flex flex-wrap gap-2">
-          <button type="submit" className="g1-btn g1-btn--primary" disabled={!address.trim() || save.isPending}>
-            {t('setup.address.next')} <IconArrowRight className="g1-icon g1-arrow" aria-hidden />
-          </button>
-        </div>
+
+        {(device === 'kindle' || device === 'pocketbook') && (
+          <>
+            <p className="mb-0 text-muted">
+              {t(device === 'kindle' ? 'setup.address.kindleHint' : 'setup.address.pocketbookHint')}
+              {device === 'kindle' && (
+                <>
+                  {' '}
+                  <a className="g1-link inline-flex items-center gap-1" href={me.amazon_devices_url} target="_blank" rel="noopener noreferrer">
+                    {t('setup.address.findLink')} <IconArrowUpRight className="g1-icon" aria-hidden />
+                  </a>
+                </>
+              )}
+            </p>
+            <div>
+              <label className="g1-label" htmlFor="setup-address">
+                {t('setup.address.label')}
+              </label>
+              <input
+                id="setup-address"
+                className="g1-input"
+                type="email"
+                autoComplete="off"
+                autoFocus={Boolean(me.device)}
+                aria-describedby={typed && typed !== device ? 'setup-address-other' : undefined}
+                placeholder={t(device === 'kindle' ? 'setup.address.placeholder' : 'setup.address.pocketbookPlaceholder')}
+                value={address}
+                onChange={(event) => setAddress(event.target.value)}
+                required
+              />
+              {typed && typed !== device && (
+                <span id="setup-address-other" className="mt-1 block text-sm text-warning">
+                  {t(typed === 'kindle' ? 'setup.address.looksKindle' : 'setup.address.looksPocketbook')}
+                </span>
+              )}
+            </div>
+            <ErrorCallout code={errorCode(save.error ?? store.error)} />
+            <div className="esel-actions flex flex-wrap gap-2">
+              <button type="submit" className="g1-btn g1-btn--primary" disabled={!address.trim() || save.isPending}>
+                {t('setup.address.next')} <IconArrowRight className="g1-icon g1-arrow" aria-hidden />
+              </button>
+            </div>
+          </>
+        )}
+        <ErrorCallout code={errorCode(remove.error)} />
         {me.kindle_email && (
           <div className="border-t border-line pt-5">
             {confirmingRemove ? (
@@ -295,7 +373,7 @@ function SenderStep({
         {t(pocketbook ? 'setup.sender.pocketbookText' : 'setup.sender.kindleText')}
       </StepHead>
       <div className="g1-stack">
-        {/* The address to copy and the place to paste it belong together */}
+        {/* The address to copy, whose it is, and the place to paste it belong together */}
         <div>
           {me.sender_email ? (
             <div className="flex flex-wrap items-center gap-2">
@@ -308,6 +386,11 @@ function SenderStep({
           ) : (
             <Callout tone="warning">{t('setup.sender.noSender')}</Callout>
           )}
+          {me.sender_email && (
+            <p className="m-0 mt-2 text-sm text-muted">
+              {t('setup.sender.whose', { domain: me.sender_email.split('@')[1] ?? '' })}
+            </p>
+          )}
           {!pocketbook && (
             <p className="m-0 mt-3">
               <a className="g1-link inline-flex items-center gap-1" href={me.amazon_settings_url} target="_blank" rel="noopener noreferrer">
@@ -318,10 +401,13 @@ function SenderStep({
         </div>
         <div className="esel-actions flex flex-wrap gap-2">
           <BackButton onClick={onBack} />
-          <button type="button" className="g1-btn g1-btn--primary" onClick={onDone}>
+          <button type="button" className="g1-btn g1-btn--primary" aria-describedby="setup-sender-next" onClick={onDone}>
             {t('setup.sender.next')} <IconArrowRight className="g1-icon g1-arrow" aria-hidden />
           </button>
         </div>
+        <p id="setup-sender-next" className="mb-0 text-sm text-muted">
+          {t('setup.sender.checkedNext')}
+        </p>
       </div>
     </div>
   );
@@ -395,7 +481,13 @@ function TestStep({ me, onBack, onFix, onDone }: { me: Me; onBack: () => void; o
           >
             {sentAt ? t('setup.test.sendAgain') : t('setup.test.send')}
           </button>
+          <Link to="/" className="g1-btn g1-btn--ghost" aria-describedby="setup-test-skip">
+            {t('setup.test.skip')}
+          </Link>
         </div>
+        <p id="setup-test-skip" className="mb-0 text-sm text-muted">
+          {t('setup.test.skipHelp')}
+        </p>
       </div>
     </div>
   );

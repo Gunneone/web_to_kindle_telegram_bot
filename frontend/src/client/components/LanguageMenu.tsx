@@ -1,6 +1,7 @@
 import { IconCheck, IconLanguage } from '@tabler/icons-react';
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
 import { LANGS, LANGUAGE_NAMES, useI18n, type Lang } from '../i18n';
+import { useMe } from '../lib/session';
 
 /** The header's language picker: an icon button that opens a menu with one entry per language. */
 export function LanguageMenu() {
@@ -10,6 +11,9 @@ export function LanguageMenu() {
   const button = useRef<HTMLButtonElement>(null);
   const items = useRef<(HTMLButtonElement | null)[]>([]);
   const menuId = useId();
+  const noteId = useId();
+  // Signed in, the choice is saved to the account, which the Telegram bot shares
+  const me = useMe();
 
   // Opening puts focus on the current language, so arrow keys start from there.
   useEffect(() => {
@@ -80,25 +84,38 @@ export function LanguageMenu() {
         <IconLanguage className="g1-icon" aria-hidden />
       </button>
       {open && (
-        <div id={menuId} role="menu" aria-label={t('common.language')} className="g1-chamfer esel-menu" onKeyDown={onMenuKeyDown}>
-          {LANGS.map((code, index) => (
-            <button
-              key={code}
-              ref={(element) => {
-                items.current[index] = element;
-              }}
-              type="button"
-              role="menuitemradio"
-              aria-checked={code === lang}
-              lang={code}
-              tabIndex={-1}
-              className="esel-menu__item"
-              onClick={() => choose(code)}
-            >
-              {LANGUAGE_NAMES[code]}
-              {code === lang && <IconCheck className="g1-icon esel-menu__check" aria-hidden />}
-            </button>
-          ))}
+        <div className="g1-chamfer esel-menu">
+          <div
+            id={menuId}
+            role="menu"
+            aria-label={t('common.language')}
+            aria-describedby={me ? noteId : undefined}
+            onKeyDown={onMenuKeyDown}
+          >
+            {LANGS.map((code, index) => (
+              <button
+                key={code}
+                ref={(element) => {
+                  items.current[index] = element;
+                }}
+                type="button"
+                role="menuitemradio"
+                aria-checked={code === lang}
+                lang={code}
+                tabIndex={-1}
+                className="esel-menu__item"
+                onClick={() => choose(code)}
+              >
+                {LANGUAGE_NAMES[code]}
+                {code === lang && <IconCheck className="g1-icon esel-menu__check" aria-hidden />}
+              </button>
+            ))}
+          </div>
+          {me && (
+            <p id={noteId} className="m-0 mt-1 border-t border-line px-3 pt-2 pb-1 text-xs text-muted">
+              {t('common.languageBot')}
+            </p>
+          )}
         </div>
       )}
     </div>
