@@ -5,7 +5,8 @@ import {
   IconMoon,
   IconSun,
 } from '@tabler/icons-react';
-import { Link, NavLink, Outlet, useLocation } from 'react-router';
+import { useEffect } from 'react';
+import { Link, NavLink, Outlet, useLocation, useNavigationType } from 'react-router';
 import { useI18n } from '../i18n';
 import { useMe } from '../lib/session';
 import { Brand } from './Brand';
@@ -25,6 +26,7 @@ export function Layout() {
   const here = pathname + search;
   const onSignIn = pathname.startsWith('/signin');
   const signIn = pathname === '/' ? '/signin' : `/signin?next=${encodeURIComponent(here)}`;
+  useScrollToTop();
   return (
     <>
       <a className="g1-skip-link" href="#main">
@@ -69,6 +71,7 @@ export function Layout() {
         <div className="g1-container g1-container--wide">
           <div className="g1-footer__inner">
             <nav className="g1-footer__links" aria-label={t('nav.footer')}>
+              <Link to="/faq">{t('nav.faq')}</Link>
               <Link to="/privacy">{t('nav.privacy')}</Link>
               <a href="https://t.me/SubstackKindleBot" target="_blank" rel="noopener noreferrer">
                 {t('nav.bot')}
@@ -97,4 +100,18 @@ export function Layout() {
       </footer>
     </>
   );
+}
+
+/**
+ * A link to another page opens it at the top, not at the height the last page was scrolled to (the
+ * footer links would otherwise land at the bottom). Back and forward leave it to the browser, and a
+ * link to an anchor (`/faq#…`) to the page it leads to.
+ */
+function useScrollToTop() {
+  const { pathname, hash } = useLocation();
+  const type = useNavigationType();
+  useEffect(() => {
+    if (type !== 'POP' && !hash) window.scrollTo(0, 0);
+    // Only a new page counts: a search in the library changes the query and stays where it is
+  }, [pathname, hash]);
 }

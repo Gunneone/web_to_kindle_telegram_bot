@@ -4,6 +4,7 @@ import { useState, type FormEvent, type MouseEvent } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { ErrorCallout } from '../components/Callout';
 import { EReader } from '../components/EReader';
+import { FaqList } from '../components/Faq';
 import { checkLinks, LinkField } from '../components/LinkField';
 import { Eyebrow, PageHead, SectionHead } from '../components/Text';
 import { useI18n } from '../i18n';
@@ -11,7 +12,8 @@ import { createBook, errorCode } from '../lib/api';
 import { usePageTitle } from '../lib/title';
 
 const STEPS = ['paste', 'make', 'read'] as const;
-const QUESTIONS = ['free', 'devices', 'sender', 'paywall', 'data'] as const;
+/** The few that matter before trying it; the rest are on the FAQ page */
+const QUESTIONS = ['free', 'account', 'devices', 'sender', 'paywall'] as const;
 
 /**
  * What Eselsohr is, for someone who isn't signed in: try it with a link right here (the book is
@@ -102,15 +104,12 @@ export function Landing({ initialLink = '' }: { initialLink?: string }) {
 
       <section className="g1-section">
         <SectionHead eyebrow={t('home.faq.eyebrow')} title={t('home.faq.title')} />
-        <div className="border-t border-line">
-          {QUESTIONS.map((question) => (
-            <details key={question} className="esel-faq border-b border-line">
-              <summary>{t(`home.faq.items.${question}.q`)}</summary>
-              <p className="m-0 max-w-prose pb-4 text-muted">{t(`home.faq.items.${question}.a`)}</p>
-            </details>
-          ))}
-        </div>
+        <FaqList questions={QUESTIONS} />
         <div className="mt-6 flex flex-wrap gap-x-6 gap-y-3">
+          <Link className="g1-link inline-flex items-center gap-1" to="/faq">
+            {t('home.faq.all')}
+            <IconArrowRight className="g1-icon g1-arrow" aria-hidden />
+          </Link>
           <Link className="g1-link" to="/privacy">
             {t('home.faq.privacyLink')}
           </Link>

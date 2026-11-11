@@ -261,7 +261,11 @@ body {
   user-select: none;
 }
 
-/* Questions on the start page: a plain list that opens one answer at a time, with a plus that turns. */
+/* Questions (FAQ page, start page): a plain list that opens one answer at a time, with a plus that turns. */
+.esel-faq {
+  /* A question linked by its anchor clears the header when scrolled to */
+  scroll-margin-top: var(--g1-space-9);
+}
 .esel-faq summary {
   display: flex;
   align-items: center;
@@ -288,6 +292,14 @@ body {
 .esel-faq summary:focus-visible {
   outline: 2px solid var(--g1-focus);
   outline-offset: 2px;
+}
+/* The FAQ page groups its questions under small headings */
+.esel-faq-group {
+  margin-top: var(--g1-space-8);
+}
+.esel-faq-group__title {
+  margin: 0 0 var(--g1-space-3);
+  font-size: var(--g1-text-xl);
 }
 
 /* The bookmarklet: a button that is meant to be dragged, not clicked. */

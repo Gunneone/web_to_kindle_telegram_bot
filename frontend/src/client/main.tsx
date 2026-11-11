@@ -7,6 +7,7 @@ import { RequireUser } from './components/RequireUser';
 import { I18nProvider } from './i18n';
 import { ApiError } from './lib/api';
 import { BookPage } from './routes/Book';
+import { Faq } from './routes/Faq';
 import { History } from './routes/History';
 import { Home } from './routes/Home';
 import { NotFound } from './routes/NotFound';
@@ -43,6 +44,7 @@ createRoot(document.getElementById('root')!).render(
               <Route path="signin" element={<SignIn />} />
               <Route path="signin/verify" element={<Verify />} />
               <Route path="privacy" element={<Privacy />} />
+              <Route path="faq" element={<Faq />} />
               {/* A book can belong to a visitor who tried Eselsohr without signing in */}
               <Route path="books/:id" element={<BookPage />} />
               <Route element={<RequireUser />}>

@@ -32,6 +32,7 @@ export const de: Messages = {
     settings: 'Einstellungen',
     signIn: 'Anmelden',
     privacy: 'Datenschutz',
+    faq: 'FAQ',
     bot: 'Telegram-Bot',
     source: 'Quellcode',
     moreProjects: 'Weitere Projekte',
@@ -68,28 +69,7 @@ export const de: Messages = {
       eyebrow: 'fragen',
       title: 'Bevor du loslegst',
       privacyLink: 'Zur Datenschutzseite',
-      items: {
-        free: {
-          q: 'Kostet das etwas?',
-          a: 'Nein. Es gibt keine Werbung und kein Tracking. Eselsohr ist ein kleines Projekt aus Dortmund.',
-        },
-        devices: {
-          q: 'Welche E-Reader funktionieren?',
-          a: 'Kindle und PocketBook bekommen Bücher per E-Mail. Für Kobo, Tolino, Apple Books oder jede andere Lese-App lädst du das EPUB herunter und öffnest es dort.',
-        },
-        sender: {
-          q: 'Warum muss ich bei Amazon einen Absender freigeben?',
-          a: 'Amazon stellt E-Mails an dein Kindle nur von Adressen zu, die du freigegeben hast. Du trägst die Adresse von Eselsohr einmal ein, die Einrichtung führt dich durch.',
-        },
-        paywall: {
-          q: 'Was ist mit Bezahlschranken?',
-          a: 'Eselsohr sieht, was ein Besucher ohne Abo sieht. Bei einem Beitrag hinter einer Bezahlschranke enthält das Buch den freien Teil und einen Link zum ganzen Beitrag.',
-        },
-        data: {
-          q: 'Was speichert ihr?',
-          a: 'Deine Anmeldung, deine Kindle-Adresse und die Links, die du geschickt hast, damit du sie sehen und erneut senden kannst. Bücher, die ohne Anmeldung entstehen, werden nach 7 Tagen gelöscht.',
-        },
-      },
+      all: 'Alle Fragen',
     },
     stepsEyebrow: 'so geht’s',
     stepsTitle: 'Drei Schritte, ein paar Sekunden',
@@ -435,6 +415,100 @@ export const de: Messages = {
       eyebrow: '04 / vorsicht',
       title: 'Konto löschen',
       text: 'Entfernt dein Konto und alles darin, endgültig.',
+    },
+  },
+  faq: {
+    eyebrow: 'fragen · antworten',
+    title: 'Häufige Fragen',
+    scribble: '(na ja, manchmal gestellt)',
+    lead: 'Wie Eselsohr funktioniert, was du tust, wenn ein Buch nicht ankommt, und was mit deinen Daten passiert.',
+    groups: {
+      basics: 'Das Wichtigste',
+      reader: 'Kindle und andere E-Reader',
+      articles: 'Artikel und Bücher',
+      account: 'Konto und Daten',
+    },
+    items: {
+      free: {
+        q: 'Kostet das etwas?',
+        a: 'Nein. Es gibt keine Werbung, kein Tracking und kein Bezahlmodell. Bücher machen und senden ist für alle kostenlos.',
+      },
+      who: {
+        q: 'Wer steckt hinter Eselsohr?',
+        a: 'Eine Person in Dortmund, als Teil von [gunne.one](https://gunne.one). Der Code ist Open Source unter der MIT-Lizenz, auf [GitHub](https://github.com/Gunneone/web_to_kindle_telegram_bot).',
+      },
+      account: {
+        q: 'Brauche ich ein Konto?',
+        a: 'Zum Ausprobieren nicht: Füg auf der Startseite einen Link ein und blättere durch das Buch. Um das EPUB herunterzuladen, Bücher an dein Kindle zu senden und eine Bibliothek zu behalten, meldest du dich mit Telegram, Google oder einem Code per E-Mail an. Es gibt kein Passwort und keine eigene Registrierung, und ein Buch, das du vor der Anmeldung gemacht hast, kommt mit.',
+      },
+      devices: {
+        q: 'Welche E-Reader funktionieren?',
+        a: 'Kindle (auch die Kindle-App) und PocketBook bekommen Bücher per E-Mail, direkt von Eselsohr. Für Kobo, Tolino, Apple Books oder jede andere Lese-App lädst du das EPUB herunter und öffnest es dort.',
+      },
+      sender: {
+        q: 'Warum muss ich bei Amazon einen Absender freigeben?',
+        a: 'Amazon stellt E-Mails an dein Kindle nur von Adressen zu, die du freigegeben hast. Das hält Spam fern. Du trägst die Absenderadresse von Eselsohr einmal bei Amazon unter „Einstellungen für persönliche Dokumente“ ein, die [Einrichtung](/setup) führt dich durch.',
+      },
+      notArriving: {
+        q: 'Ein Buch steht auf „Gesendet“, ist aber nicht auf meinem Kindle',
+        a: '„Gesendet“ heißt, die E-Mail hat Eselsohr verlassen. Amazon verwirft E-Mails von nicht freigegebenen Absendern, ohne jemandem Bescheid zu geben. Prüf deshalb der Reihe nach: Die Absenderadresse von Eselsohr steht ohne Tippfehler auf deiner Freigabeliste. Deine Kindle-Adresse stimmt. Im Postfach deines Amazon-Kontos liegt keine Ablehnung von Amazon. Dein Kindle ist im WLAN. Amazon braucht manchmal auch bis zu 10 Minuten. Ein Testbuch aus der [Einrichtung](/setup) zeigt dir, ob es jetzt klappt.',
+      },
+      pocketbook: {
+        q: 'Wie funktioniert es mit einem PocketBook?',
+        a: 'Trag in der [Einrichtung](/setup) deine Send-to-PocketBook-Adresse ein, sie endet auf @pbsync.com. Wenn das erste Buch ankommt, schickt dir PocketBook eine E-Mail, in der du Eselsohr als Absender bestätigst. Danach landen Bücher im Ordner Send-to-PocketBook, sobald dein Reader synchronisiert.',
+      },
+      otherReaders: {
+        q: 'Wie kommt ein Buch auf einen Kobo oder Tolino?',
+        a: 'Lade das EPUB auf der Seite des Buchs oder in deiner Bibliothek herunter. Kopier es per USB auf den Reader, oder lade es mit der App oder Cloud des Readers hoch. In Eselsohr musst du dafür nichts einrichten.',
+      },
+      images: {
+        q: 'Bilder sind auf meinem Kindle zu klein',
+        a: 'Schalte in den [Einstellungen](/settings) „Bilder auf dem Kindle antippen und zoomen“ ein. Ein Tipp auf ein Bild öffnet es dann in voller Größe. Das gilt für Bücher, die du danach machst.',
+      },
+      sites: {
+        q: 'Welche Seiten funktionieren?',
+        a: 'Die meisten Seiten mit einem Artikel darauf: Substack, Medium, Blogs mit Ghost oder WordPress, Nachrichtenseiten, Wikipedia. Startseiten, Feeds und Seiten, die ihren Text erst mit JavaScript zeigen, wie Notion, gehen nicht. Ein paar Seiten sperren automatische Leser ganz aus.',
+      },
+      paywall: {
+        q: 'Was ist mit Bezahlschranken?',
+        a: 'Eselsohr sieht, was ein Besucher ohne Abo sieht. Bei einem Beitrag hinter einer Bezahlschranke enthält das Buch den freien Teil und einen Link zum ganzen Beitrag, und deine Bibliothek markiert es mit „Paywall“.',
+      },
+      wrong: {
+        q: 'In einem Buch fehlt etwas oder es sieht falsch aus',
+        a: 'Nutz auf der Seite des Buchs „Stimmt etwas mit diesem Buch nicht?“. Deine Nachricht geht zusammen mit dem Buch an die Person, die Eselsohr betreibt, und hilft, diese Seite besser zu lesen.',
+      },
+      several: {
+        q: 'Kann ich mehrere Artikel auf einmal senden?',
+        a: 'Ja. Füg auf der Seite [Senden](/) bis zu 10 Links in das Feld ein, und aus jedem wird ein eigenes Buch. Auch der Telegram-Bot nimmt bis zu 10 Links in einer Nachricht.',
+      },
+      shortcuts: {
+        q: 'Geht es auch, ohne den Link zu kopieren?',
+        a: 'Ja, auf drei Wegen, alle auf der Seite [Senden](/) erklärt: ein Lesezeichen-Knopf für deinen Browser, Eselsohr auf dem Startbildschirm deines Handys (unter Android taucht es dann beim Teilen einer Seite auf) und der [Telegram-Bot](https://t.me/SubstackKindleBot), dem du Links teilen kannst.',
+      },
+      bot: {
+        q: 'Was hat der Telegram-Bot damit zu tun?',
+        a: 'Er ist derselbe Dienst in Telegram: Teil einen Link mit dem [Bot](https://t.me/SubstackKindleBot), und das Buch geht an dein Kindle oder kommt als Datei zurück. Meldest du dich hier mit Telegram an, teilst du dir ein Konto mit dem Bot: dieselbe Kindle-Adresse, dieselben Einstellungen, dieselbe Bibliothek.',
+      },
+      emptyLibrary: {
+        q: 'Meine Bibliothek ist leer, obwohl ich schon Bücher gemacht habe',
+        a: 'Wahrscheinlich hast du dich anders angemeldet als beim letzten Mal. Telegram und Google oder E-Mail sind erst einmal getrennte Konten. Google und ein Code an dieselbe E-Mail-Adresse führen zum selben Konto. Verbinde in den [Einstellungen](/settings) den Weg, den du vorher genutzt hast, dann werden die beiden Bibliotheken zusammengeführt.',
+      },
+      keep: {
+        q: 'Wie lange werden Bücher aufbewahrt?',
+        a: 'Deine Bibliothek behält jedes Buch, bis du es löschst. Die EPUB-Dateien bleiben auch auf dem Server, aber wenn der Speicher knapp wird, verschwinden die ältesten. So ein Buch kannst du aus demselben Link noch einmal machen. Bücher, die ohne Anmeldung entstehen, werden nach 7 Tagen gelöscht.',
+      },
+      data: {
+        q: 'Was speichert ihr über mich?',
+        a: 'Deine Anmeldewege, deine Kindle-Adresse, deine Einstellungen und die Links, die du geschickt hast, damit du deine Bücher sehen und erneut senden kannst. Es gibt keine Analyse und keine Werbe-Cookies. Die Einzelheiten stehen auf der [Datenschutzseite](/privacy).',
+      },
+      delete: {
+        q: 'Wie lösche ich mein Konto?',
+        a: 'Ganz unten in den [Einstellungen](/settings). Das entfernt deine Anmeldewege, deine Kindle-Adresse und deine Bibliothek endgültig, und auch die Daten des Bots, wenn du ihn mit demselben Konto nutzt. Bücher, die schon auf deinem Kindle sind, bleiben dort.',
+      },
+    },
+    more: {
+      title: 'Deine Frage ist nicht dabei?',
+      text: 'Schreib über die Kontaktseite auf [gunne.one](https://gunne.one). Wenn ein Buch falsch aussieht, nutz stattdessen „Stimmt etwas mit diesem Buch nicht?“ auf seiner Seite.',
     },
   },
   privacy: {

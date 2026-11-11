@@ -37,6 +37,7 @@ export const en = {
     settings: 'Settings',
     signIn: 'Sign in',
     privacy: 'Privacy',
+    faq: 'FAQ',
     bot: 'Telegram bot',
     source: 'Source',
     moreProjects: 'More projects',
@@ -73,28 +74,7 @@ export const en = {
       eyebrow: 'questions',
       title: 'Before you start',
       privacyLink: 'Read the privacy page',
-      items: {
-        free: {
-          q: 'Does it cost anything?',
-          a: 'No. There are no ads and no tracking. Eselsohr is a small project run from Dortmund, Germany.',
-        },
-        devices: {
-          q: 'Which e-readers work?',
-          a: 'Kindle and PocketBook get books by email. For Kobo, Tolino, Apple Books or any other reading app, download the EPUB and open it there.',
-        },
-        sender: {
-          q: 'Why do I have to approve a sender at Amazon?',
-          a: 'Amazon only delivers mail to your Kindle from addresses you approved. You add Eselsohr’s address once, and the setup walks you through it.',
-        },
-        paywall: {
-          q: 'What about paywalls?',
-          a: 'Eselsohr sees what a visitor without a subscription sees. For a paywalled post, the book holds the free part and a link to the full post.',
-        },
-        data: {
-          q: 'What do you keep?',
-          a: 'Your sign-in, your Kindle address and the links you sent, so you can see and resend them. Books made without signing in are deleted after 7 days.',
-        },
-      },
+      all: 'All questions',
     },
     stepsEyebrow: 'how it works',
     stepsTitle: 'Three steps, a few seconds',
@@ -438,6 +418,101 @@ export const en = {
       eyebrow: '04 / careful',
       title: 'Delete your account',
       text: 'Removes your account and everything in it, for good.',
+    },
+  },
+  // The FAQ page. `[text](/path)` in an answer becomes a link (a path within the site, or a full URL).
+  faq: {
+    eyebrow: 'questions · answers',
+    title: 'Frequently asked questions',
+    scribble: '(well, sometimes asked)',
+    lead: 'How Eselsohr works, what to do when a book doesn’t arrive, and what happens to your data.',
+    groups: {
+      basics: 'The basics',
+      reader: 'Kindle and other e-readers',
+      articles: 'Articles and books',
+      account: 'Account and data',
+    },
+    items: {
+      free: {
+        q: 'Does it cost anything?',
+        a: 'No. There are no ads, no tracking and no paid plan. Making and sending books is free for everyone.',
+      },
+      who: {
+        q: 'Who is behind Eselsohr?',
+        a: 'One person in Dortmund, Germany, as part of [gunne.one](https://gunne.one). The code is open source under the MIT license, on [GitHub](https://github.com/Gunneone/web_to_kindle_telegram_bot).',
+      },
+      account: {
+        q: 'Do I need an account?',
+        a: 'Not to try it: paste a link on the start page and flip through the book. To download the EPUB, send books to your Kindle and keep a library, sign in with Telegram, Google or a code by email. There’s no password and no separate sign-up, and a book you made before signing in comes along.',
+      },
+      devices: {
+        q: 'Which e-readers work?',
+        a: 'Kindle (the Kindle app too) and PocketBook get books by email, straight from Eselsohr. For Kobo, Tolino, Apple Books or any other reading app, download the EPUB and open it there.',
+      },
+      sender: {
+        q: 'Why do I have to approve a sender at Amazon?',
+        a: 'Amazon only delivers mail to your Kindle from addresses you approved, which keeps spam off it. You add Eselsohr’s sender address once, under Personal Document Settings on Amazon, and the [setup](/setup) walks you through it.',
+      },
+      notArriving: {
+        q: 'A book says “Sent”, but it isn’t on my Kindle',
+        a: '“Sent” means the mail left Eselsohr. Amazon drops mail from senders that aren’t approved without telling anyone, so check, in this order: Eselsohr’s sender address is on your approved list, without a typo. Your Kindle address is right. There’s no rejection mail from Amazon in the inbox of your Amazon account. Your Kindle is on Wi-Fi. Amazon can also take up to 10 minutes. A test book from the [setup](/setup) shows whether it works now.',
+      },
+      pocketbook: {
+        q: 'How does it work with a PocketBook?',
+        a: 'Add your Send-to-PocketBook address, which ends in @pbsync.com, in the [setup](/setup). When the first book arrives, PocketBook emails you to confirm Eselsohr as a sender. After that, books show up in the Send-to-PocketBook folder whenever your reader syncs.',
+      },
+      otherReaders: {
+        q: 'How do I get a book onto a Kobo or Tolino?',
+        a: 'Download the EPUB from the book’s page or your library. Copy it to the reader over USB, or upload it with the reader’s own app or cloud. Nothing needs setting up in Eselsohr.',
+      },
+      images: {
+        q: 'Images on my Kindle are too small',
+        a: 'Turn on “Tap images to zoom on your Kindle” in [Settings](/settings). A tap on a picture then opens it full size. It applies to books made after you turn it on.',
+      },
+      sites: {
+        q: 'Which sites work?',
+        a: 'Most pages that hold one article: Substack, Medium, Ghost and WordPress blogs, news sites, Wikipedia. Start pages, feeds and pages that only show their text once JavaScript runs, like Notion, don’t work. A few sites block automated readers altogether.',
+      },
+      paywall: {
+        q: 'What about paywalls?',
+        a: 'Eselsohr sees what a visitor without a subscription sees. For a paywalled post, the book holds the free part and a link to the full post, and your library marks it “Paywalled”.',
+      },
+      wrong: {
+        q: 'Something is missing or looks wrong in a book',
+        a: 'On the book’s page, use “Something wrong with this book?”. Your note goes to the person who runs Eselsohr, together with the book, and helps fix how that site is read.',
+      },
+      several: {
+        q: 'Can I send several articles at once?',
+        a: 'Yes. Paste up to 10 links into the field on the [Send](/) page, and each one becomes its own book. The Telegram bot takes up to 10 links in one message too.',
+      },
+      shortcuts: {
+        q: 'Can I send an article without copying its link?',
+        a: 'Yes, in three ways, all explained on the [Send](/) page: a bookmark button for your browser, Eselsohr on your phone’s home screen (on Android it then shows up when you share a page), and the [Telegram bot](https://t.me/SubstackKindleBot), which takes shared links.',
+      },
+      bot: {
+        q: 'How does the Telegram bot fit in?',
+        a: 'It’s the same service inside Telegram: share a link with the [bot](https://t.me/SubstackKindleBot), and the book goes to your Kindle or comes back as a file. Sign in here with Telegram and you share one account with the bot: the same Kindle address, settings and library.',
+      },
+      emptyLibrary: {
+        q: 'My library is empty, but I made books before',
+        a: 'You probably signed in another way than last time. Telegram and Google or email start out as separate accounts. Google and a code for the same email address lead to the same one. In [Settings](/settings), connect the way you used before, and the two libraries are joined.',
+      },
+      keep: {
+        q: 'How long are books kept?',
+        a: 'Your library keeps every book until you delete it. The EPUB files stay on the server too, but when it runs low on space, the oldest ones are removed. You can make such a book again from the same link. Books made without signing in are deleted after 7 days.',
+      },
+      data: {
+        q: 'What do you keep about me?',
+        a: 'Your sign-in methods, your Kindle address, your settings and the links you sent, so you can see and resend your books. There are no analytics and no ad cookies. The [privacy page](/privacy) has the details.',
+      },
+      delete: {
+        q: 'How do I delete my account?',
+        a: 'At the bottom of [Settings](/settings). It removes your sign-in methods, Kindle address and library for good, and the bot’s data too if you use it with the same account. Books already on your Kindle stay there.',
+      },
+    },
+    more: {
+      title: 'Your question isn’t here?',
+      text: 'Write through the contact page on [gunne.one](https://gunne.one). For a book that came out wrong, use “Something wrong with this book?” on its page instead.',
     },
   },
   privacy: {

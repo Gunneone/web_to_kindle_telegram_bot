@@ -18,6 +18,18 @@
       "runtimeExecutable": "sh",
       "runtimeArgs": ["-c", "exec env API_URL=http://127.0.0.1:8001 PORT=5174 npm --prefix frontend run dev"],
       "port": 5174
+    },
+    {
+      "name": "eselsohr-api-8002",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": ["-c", "cd src && exec env DATABASE_URL=sqlite:////private/tmp/claude-501/-Users-gunneone--claude-spares-spare-sAz00C/dcb1b616-adf7-499e-8ae7-9da43ffd6b59/scratchpad/dev.db PUBLIC_URL=http://localhost:5179 WEB_PORT=8002 ../.venv/bin/python web_server.py"],
+      "port": 8002
+    },
+    {
+      "name": "eselsohr-frontend-5179",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": ["-c", "exec env API_URL=http://127.0.0.1:8002 PORT=5179 npm --prefix frontend run dev"],
+      "port": 5179
     }
   ]
 }
