@@ -163,9 +163,10 @@ export function History() {
             <table className="g1-table table-fixed">
               <colgroup>
                 <col />
-                <col className="w-36" />
-                <col className="w-44" />
-                <col className="w-76" />
+                <col className="w-32" />
+                <col className="w-32" />
+                {/* Download, Send to Kindle and a labelled Delete */}
+                <col className="w-[22rem]" />
               </colgroup>
               <thead>
                 <tr>
