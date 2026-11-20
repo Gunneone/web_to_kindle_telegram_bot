@@ -440,6 +440,24 @@ class BookTest(ApiCase):
         self.assertEqual(forced.status_code, 202)
         self.assertNotEqual(forced.json()['book']['id'], first['id'])
 
+    def test_sending_a_previewed_book_asks_when_the_page_is_on_the_kindle(self):
+        c = self.signed_in()
+        first = c.post('/api/books', json={'url': 'https://e.com/post', 'target': 'kindle'}).json()['book']
+        self.wait_for(c, first['id'])
+        looked = c.post('/api/books', json={'url': 'https://www.e.com/post/'})  # "preview first" doesn't ask
+        self.assertEqual(looked.status_code, 202)
+        looked = self.wait_for(c, looked.json()['book']['id'])
+        r = c.post(f"/api/books/{looked['id']}/send", json={'target': 'kindle'})
+        self.assertEqual((r.status_code, r.json()['error']['code']), (409, 'DUPLICATE'))
+        self.assertEqual(r.json()['error']['book']['id'], first['id'])
+        self.assertEqual(c.get(f"/api/books/{looked['id']}").json()['book']['status'], 'ready')
+        self.assertEqual(len(self.mailed), 1)
+        forced = c.post(f"/api/books/{looked['id']}/send", json={'target': 'kindle', 'force': True})
+        self.assertEqual(forced.status_code, 202)
+        done = self.wait_for(c, looked['id'], lambda b: b['status'] != 'processing' and b['delivered'])
+        self.assertEqual(done['delivered'], ['kindle'])
+        self.assertEqual(len(self.mailed), 2)
+
     def test_resend_reuses_the_book(self):
         c = self.signed_in()
         book = c.post('/api/books', json={'url': 'https://e.com/post'}).json()['book']
@@ -491,6 +509,9 @@ class BookTest(ApiCase):
         book = c.post('/api/books', json={'url': 'https://e.com/post', 'target': 'kindle'}).json()['book']
         self.wait_for(c, book['id'])
         r = c.post(f"/api/books/{book['id']}/send", json={'target': 'kindle'})  # it never showed up
+        self.assertEqual((r.status_code, r.json()['error']['code']), (409, 'DUPLICATE'))  # "send it again?"
+        self.assertEqual(r.json()['error']['book']['id'], book['id'])
+        r = c.post(f"/api/books/{book['id']}/send", json={'target': 'kindle', 'force': True})  # yes
         self.assertEqual(r.status_code, 202)
         done = self.wait_for(c, book['id'])
         self.assertEqual((done['status'], done['delivered'], len(self.mailed), self.epubs), ('sent', ['kindle'], 2, 1))

@@ -4,9 +4,12 @@ so existing databases keep working; rows created before a column existed hold NU
 """
 
 import os
-from datetime import datetime, timedelta, timezone
+import re
+from datetime import datetime, timezone
+from urllib.parse import parse_qsl, urlencode, urlsplit
 
-from sqlalchemy import Column, DateTime, Integer, String, UniqueConstraint, create_engine, event, inspect, or_, text
+from sqlalchemy import (Column, DateTime, Integer, String, UniqueConstraint, and_, create_engine, event, inspect,
+                        or_, text)
 from sqlalchemy.orm import declarative_base, sessionmaker
 
 def utcnow() -> datetime:
@@ -240,16 +243,35 @@ def get_article(article_id: int) -> Article | None:
         return session.get(Article, article_id)
 
 
-def recent_delivery(user_id: int, url: str, days: int = 30) -> Article | None:
-    """The user's latest successful delivery of this URL within the last `days` days."""
-    since = utcnow() - timedelta(days=days)
+# Query parameters that only say where a link was shared from, not which page it is
+_TRACKING_PARAMS = re.compile(r'^(utm_\w+|fbclid|gclid|mc_cid|mc_eid|igshid|ref_src)$', re.I)
+
+
+def same_page_key(url: str) -> str:
+    """What two links to the same page have in common: no scheme, 'www.', fragment, trailing slash
+    or tracking parameters, and the host in lower case."""
+    parts = urlsplit(url.strip())
+    host = parts.netloc.lower().removeprefix('www.')
+    path = parts.path.rstrip('/')
+    query = urlencode([(k, v) for k, v in parse_qsl(parts.query, keep_blank_values=True)
+                       if not _TRACKING_PARAMS.match(k)])
+    return f'{host}{path}' + (f'?{query}' if query else '')
+
+
+def kindle_delivery(user_id: int, url: str) -> Article | None:
+    """The user's latest delivery of this page to their Kindle, however long ago.
+
+    Rows from before `delivered` was kept count too when they were sent: back then books went to the Kindle.
+    """
+    key = same_page_key(url)
     with Session() as session:
-        return (session.query(Article)
-                .filter(Article.user_id == user_id, Article.article_url == url,
-                        or_(Article.status.in_(DELIVERED), Article.status.is_(None)),
-                        Article.timestamp >= since)
-                .order_by(Article.timestamp.desc())
-                .first())
+        candidates = (session.query(Article)
+                      .filter(Article.user_id == user_id,
+                              or_(Article.delivered.like(f'%{KINDLE}%'),
+                                  and_(Article.delivered.is_(None),
+                                       or_(Article.status.in_(DELIVERED), Article.status.is_(None)))))
+                      .order_by(Article.timestamp.desc(), Article.id.desc()))
+        return next((a for a in candidates if a.article_url and same_page_key(a.article_url) == key), None)
 
 
 # History filters: what a row's status and delivery say about it

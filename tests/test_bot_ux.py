@@ -313,6 +313,7 @@ class KeyboardsTest(unittest.TestCase):
             keyboards.settings('de', self.user), keyboards.privacy('de'),
             keyboards.result_card('de', big_id, 'https://e.com', set(), self.user, True),
             keyboards.error_card('de', big_id, 'https://e.com'), keyboards.duplicate('de', big_id),
+            keyboards.duplicate('de', big_id, kindle_only=True),
             keyboards.send_to_kindle('de', big_id),
             keyboards.history([db.Article(id=big_id + i) for i in range(5)], big_id, big_id * 3),
             keyboards.setup_sender('de', 'bot@example.com', 'https://www.amazon.de/'),
@@ -362,6 +363,12 @@ class KeyboardsTest(unittest.TestCase):
     def test_copy_button_only_with_a_sender(self):
         self.assertTrue(any(b.copy_text for b in all_buttons(keyboards.setup_sender('en', 'a@b.de', 'https://x'))))
         self.assertFalse(any(b.copy_text for b in all_buttons(keyboards.setup_sender('en', '', 'https://x'))))
+
+    def test_duplicate_notice_sends_again_where_it_was_asked_to(self):
+        def actions(markup):
+            return [b.callback_data for row in markup.inline_keyboard for b in row]
+        self.assertEqual(actions(keyboards.duplicate('en', 7)), ['art:resend:7', 'art:file:7'])
+        self.assertEqual(actions(keyboards.duplicate('en', 7, kindle_only=True)), ['art:resend_kindle:7', 'art:file:7'])
 
     def test_result_card_offers_what_was_not_delivered(self):
         to_kindle = all_buttons(keyboards.result_card('en', 1, 'https://e.com', {db.KINDLE}, self.user, False))
@@ -451,8 +458,8 @@ class StorageTest(unittest.TestCase):
         self.assertEqual(user.targets, {db.KINDLE})
         self.assertTrue(user.image_links)
         self.assertFalse(user.chose_chat_only)
-        # Rows from before the status column counted as sent
-        self.assertIsNotNone(db.recent_delivery(100, 'https://example.com/old'))
+        # Rows from before the status column counted as sent, to the Kindle
+        self.assertIsNotNone(db.kindle_delivery(100, 'https://example.com/old'))
         text, _ = history_screen.render(100, 'en')
         self.assertIn('example.com', text)
 
@@ -482,10 +489,12 @@ class StorageTest(unittest.TestCase):
         self.assertIn('7. ❌', text)
         self.assertEqual([b.callback_data for b in markup.inline_keyboard[-1]], ['hist:0'])
 
-        self.assertIsNotNone(db.recent_delivery(user.user_id, 'https://example.com/3'))
-        self.assertIsNone(db.recent_delivery(user.user_id, 'https://example.com/0'))  # failed
-        db.update_article(ids[3], timestamp=db.utcnow() - timedelta(days=40))
-        self.assertIsNone(db.recent_delivery(user.user_id, 'https://example.com/3'))  # too long ago
+        self.assertIsNotNone(db.kindle_delivery(user.user_id, 'https://example.com/3'))
+        self.assertIsNone(db.kindle_delivery(user.user_id, 'https://example.com/0'))  # failed
+        db.update_article(ids[3], timestamp=db.utcnow() - timedelta(days=400))
+        self.assertIsNotNone(db.kindle_delivery(user.user_id, 'https://example.com/3'))  # however long ago
+        db.update_article(ids[4], delivered=db.TELEGRAM)
+        self.assertIsNone(db.kindle_delivery(user.user_id, 'https://example.com/4'))  # only in the chat
 
     def test_settings_panel(self):
         user = upsert_user(TgUser(300))
@@ -540,6 +549,39 @@ class ErrorHandlerTest(unittest.IsolatedAsyncioTestCase):
                       ValueError('boom')):
             with self.subTest(error=type(error).__name__):
                 (await self.run_handler(error)).assert_awaited_once()
+
+
+
+class ArticleButtonTest(unittest.IsolatedAsyncioTestCase):
+    """Which buttons stop to ask "already on your Kindle?" and which answer that question already."""
+
+    async def press(self, action):
+        from unittest import mock
+        from bot.handlers import articles
+        # No database: StorageTest wants to set up the old schema itself
+        user = db.User(user_id=4242, kindle_email='ann@kindle.com')
+        article = db.Article(id=7, user_id=user.user_id, article_url='https://e.com/post')
+        query = mock.Mock(data=f'art:{action}:{article.id}', answer=mock.AsyncMock())
+        query.message.reply_to_message = None
+        update = mock.Mock(callback_query=query)
+        with mock.patch.object(articles, 'user_and_lang', return_value=(user, 'en')), \
+                mock.patch.object(articles.db, 'get_article', return_value=article), \
+                mock.patch.object(articles.delivery, 'deliver', mock.AsyncMock()) as deliver:
+            await articles.on_article_button(update, mock.Mock())
+        return deliver.await_args.kwargs
+
+    async def test_sending_asks_first(self):
+        for action, targets in (('kindle', {db.KINDLE}), ('again', None)):
+            with self.subTest(action=action):
+                sent = await self.press(action)
+                self.assertEqual((sent['targets'], sent['force']), (targets, False))
+
+    async def test_answers_send_right_away(self):
+        for action, targets in (('resend', None), ('resend_kindle', {db.KINDLE}), ('retry', None),
+                                ('file', {db.TELEGRAM})):
+            with self.subTest(action=action):
+                sent = await self.press(action)
+                self.assertEqual((sent['targets'], sent['force']), (targets, True))
 
 
 if __name__ == '__main__':

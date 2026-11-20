@@ -52,7 +52,8 @@ def set_lang(lang: str) -> str:
 def article_action(action: str, article_id: int) -> str:
     """
     action: 'kindle' (send to Kindle), 'file' (EPUB to the chat), 'again' (deliver as usual, new message),
-    'retry' (deliver as usual, reusing the message the button is on)
+    'retry' (deliver as usual, reusing the message the button is on), 'resend' and 'resend_kindle' (like
+    'retry' and 'kindle', past the "already on your Kindle" question, reusing the message)
     """
     return f'art:{action}:{article_id}'
 
@@ -191,8 +192,11 @@ def error_card(lang, article_id: int, url: str):
                    button(t(lang, 'btn_open_link'), url=url)])
 
 
-def duplicate(lang, article_id: int):
-    return markup([button(t(lang, 'btn_send_again'), article_action('retry', article_id)),
+def duplicate(lang, article_id: int, kindle_only: bool = False):
+    """Under "you already sent this to your Kindle": send it anyway (to the Kindle only, when that was asked
+    for, else as the user's setting says), or just the EPUB here."""
+    again = article_action('resend_kindle' if kindle_only else 'resend', article_id)
+    return markup([button(t(lang, 'btn_send_again'), again, style=PRIMARY),
                    button(t(lang, 'btn_epub_here'), article_action('file', article_id))])
 
 

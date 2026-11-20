@@ -8,9 +8,9 @@ import { checkLinks, LinkField } from '../components/LinkField';
 import { PageHead, SectionHead } from '../components/Text';
 import { UnconfirmedCallout } from '../components/Unconfirmed';
 import { useI18n } from '../i18n';
-import { ApiError, createBook, errorCode, resendBook, type Book, type Target } from '../lib/api';
-import { useRecentBooks, useRefreshBooks } from '../lib/books';
-import { formatDate } from '../lib/format';
+import { AlreadySent } from '../components/AlreadySent';
+import { ApiError, createBook, errorCode, type Book, type Target } from '../lib/api';
+import { useRecentBooks, useRefreshBooks, useSendBook } from '../lib/books';
 import { bookmarklet, MAX_LINKS } from '../lib/links';
 import { useMe } from '../lib/session';
 import { usePageTitle } from '../lib/title';
@@ -34,7 +34,7 @@ interface Started {
  * are started one after the other and followed in the list below.
  */
 export function Send({ initialLink = '' }: { initialLink?: string }) {
-  const { t, lang } = useI18n();
+  const { t } = useI18n();
   usePageTitle(t('nav.send'));
   const me = useMe();
   const navigate = useNavigate();
@@ -90,7 +90,7 @@ export function Send({ initialLink = '' }: { initialLink?: string }) {
       setResult(outcome);
     },
   });
-  // "Make it again" on a link that already went out: only that one, the other results stay
+  // "Send again anyway" on a link that already went to the Kindle: only that one, the other results stay
   const redo = useMutation({
     mutationFn: (duplicate: Duplicate) => createBook(duplicate.url, true, result?.target),
     onSuccess: ({ book }, duplicate) => {
@@ -108,10 +108,9 @@ export function Send({ initialLink = '' }: { initialLink?: string }) {
       );
     },
   });
-  const resend = useMutation({
-    mutationFn: ({ book, target }: { book: Book; target?: Target }) => resendBook(book.id, target),
-    onSuccess: () => void refresh(),
-  });
+  const dropDuplicate = (duplicate: Duplicate) =>
+    setResult((current) => current && { ...current, duplicates: current.duplicates.filter((d) => d !== duplicate) });
+  const resend = useSendBook();
 
 
   const go = (target?: Target) => {
@@ -208,28 +207,24 @@ export function Send({ initialLink = '' }: { initialLink?: string }) {
         )}
         {result && result.dropped > 0 && <Callout tone="warning">{t('send.tooMany', { n: MAX_LINKS })}</Callout>}
         {result?.duplicates.map((duplicate) => (
-          <Callout
+          <AlreadySent
             key={duplicate.url}
-            tone="info"
-            title={
-              result.duplicates.length + result.started.length > 1
-                ? t('send.duplicateNamed', { title: duplicate.book.title, date: formatDate(duplicate.book.created_at, lang) })
-                : t('send.duplicateTitle', { date: formatDate(duplicate.book.created_at, lang) })
-            }
-          >
-            {t('send.duplicateText')}
-            <div className="mt-3 flex flex-wrap gap-2">
-              {duplicate.book.can_download && (
-                <Link className="g1-btn g1-btn--sm" to={`/books/${duplicate.book.id}`} state={{ from: '/' }}>
-                  {t('send.openIt')}
-                </Link>
-              )}
-              <button type="button" className="g1-btn g1-btn--sm" disabled={redo.isPending} onClick={() => redo.mutate(duplicate)}>
-                {t('send.sendAgain')}
-              </button>
-            </div>
-          </Callout>
+            previous={duplicate.book}
+            named={result.duplicates.length + result.started.length > 1}
+            busy={redo.isPending}
+            onSend={() => redo.mutate(duplicate)}
+            onCancel={() => dropDuplicate(duplicate)}
+          />
         ))}
+        {resend.held && (
+          <AlreadySent
+            previous={resend.held.previous}
+            named
+            busy={resend.mutation.isPending}
+            onSend={resend.confirm}
+            onCancel={resend.dismiss}
+          />
+        )}
         {singleFailure ? (
           <ErrorCallout code={failures[0].code} />
         ) : (
@@ -245,7 +240,7 @@ export function Send({ initialLink = '' }: { initialLink?: string }) {
             </Callout>
           )
         )}
-        <ErrorCallout code={errorCode(start.error) ?? errorCode(redo.error) ?? errorCode(resend.error)} />
+        <ErrorCallout code={errorCode(start.error) ?? errorCode(redo.error) ?? resend.error} />
       </form>
 
       <section className="g1-section">
@@ -269,8 +264,8 @@ export function Send({ initialLink = '' }: { initialLink?: string }) {
                 key={book.id}
                 book={book}
                 hasKindle={hasKindle}
-                busy={resend.isPending}
-                onSend={(target_book, target) => resend.mutate({ book: target_book, target })}
+                busy={resend.mutation.isPending}
+                onSend={resend.send}
               />
             ))}
           </ul>

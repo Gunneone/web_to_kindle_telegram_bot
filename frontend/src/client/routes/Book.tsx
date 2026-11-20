@@ -1,7 +1,8 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import { IconArrowLeft, IconArrowUpRight, IconDownload, IconRefresh, IconSend } from '@tabler/icons-react';
 import { useEffect } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router';
+import { AlreadySent } from '../components/AlreadySent';
 import { ArrivalReasons } from '../components/ArrivalHelp';
 import { BookBadges, DeleteBook, failureText, ProgressStrip, SendAgain, type FromState } from '../components/BookRow';
 import { Callout, ErrorCallout } from '../components/Callout';
@@ -10,8 +11,8 @@ import { Feedback } from '../components/Feedback';
 import { Eyebrow } from '../components/Text';
 import { UnconfirmedNote } from '../components/Unconfirmed';
 import { useI18n } from '../i18n';
-import { downloadUrl, errorCode, previewUrl, resendBook, type Target } from '../lib/api';
-import { useBook, useRefreshBooks } from '../lib/books';
+import { downloadUrl, errorCode, previewUrl } from '../lib/api';
+import { useBook, useSendBook } from '../lib/books';
 import { formatDate, formatSize } from '../lib/format';
 import { useMe, useSession } from '../lib/session';
 import { usePageTitle } from '../lib/title';
@@ -24,7 +25,6 @@ export function BookPage() {
   const me = useMe();
   const session = useSession();
   const client = useQueryClient();
-  const refresh = useRefreshBooks();
   const query = useBook(bookId);
   usePageTitle(query.data?.book?.title ?? t('titles.book'));
   const location = useLocation();
@@ -34,13 +34,9 @@ export function BookPage() {
   useEffect(() => {
     if (loaded && location.hash === '#not-arrived') document.getElementById('not-arrived')?.scrollIntoView({ block: 'start' });
   }, [loaded, location.hash]);
-  const send = useMutation({
-    mutationFn: (target?: Target) => resendBook(bookId, target),
-    onSuccess: (data) => {
-      client.setQueryData(['books', 'one', bookId], data);
-      void refresh();
-    },
-  });
+  // A send to the Kindle stops to ask when the page went there before (as this book or another one)
+  const sending = useSendBook((data) => client.setQueryData(['books', 'one', bookId], data));
+  const send = sending.mutation;
 
   // Back to where the book was opened from: Send or the library (with its search), else the library
   const from = (location.state as FromState | null)?.from;
@@ -73,7 +69,7 @@ export function BookPage() {
   const guest = !me;
   const working = book.status === 'processing';
   // Sending a book that is already built: keep it on the screen while it goes out
-  const delivering = working && (book.stage === 'sending' || (send.variables !== undefined && !send.isError));
+  const delivering = working && (book.stage === 'sending' || (send.variables?.target !== undefined && !send.isError));
   const building = working && !delivering;
   const failed = book.status === 'failed' || book.status === 'interrupted';
   const showBook = book.can_download || delivering;
@@ -125,7 +121,7 @@ export function BookPage() {
                   <div className="g1-stack">
                     <p className="m-0 text-muted">{t('book.helpResend')}</p>
                     <div>
-                      <SendAgain book={book} busy={working || send.isPending} onConfirm={() => send.mutate('kindle')} />
+                      <SendAgain book={book} busy={working || send.isPending} onConfirm={() => sending.send(book, 'kindle', true)} />
                     </div>
                   </div>
                 )}
@@ -159,7 +155,7 @@ export function BookPage() {
                 type="button"
                 className="g1-btn g1-btn--primary"
                 disabled={working || send.isPending}
-                onClick={() => send.mutate('kindle')}
+                onClick={() => sending.send(book, 'kindle')}
               >
                 <IconSend className="g1-icon" aria-hidden />
                 {t('books.sendToKindle')}
@@ -177,10 +173,10 @@ export function BookPage() {
               </a>
             )}
             {book.can_download && hasKindle && onKindle && (
-              <SendAgain book={book} busy={working || send.isPending} onConfirm={() => send.mutate('kindle')} />
+              <SendAgain book={book} busy={working || send.isPending} onConfirm={() => sending.send(book, 'kindle', true)} />
             )}
             {failed && !book.can_download && (
-              <button type="button" className="g1-btn g1-btn--primary" disabled={send.isPending} onClick={() => send.mutate(undefined)}>
+              <button type="button" className="g1-btn g1-btn--primary" disabled={send.isPending} onClick={() => sending.send(book)}>
                 <IconRefresh className="g1-icon" aria-hidden />
                 {t('books.retry')}
               </button>
@@ -208,7 +204,17 @@ export function BookPage() {
 
           {book.can_download && hasKindle && !onKindle && !working && <UnconfirmedNote />}
 
-          <ErrorCallout code={errorCode(send.error)} />
+          {sending.held && (
+            <AlreadySent
+              previous={sending.held.previous}
+              named={false}
+              busy={send.isPending}
+              onSend={sending.confirm}
+              onCancel={sending.dismiss}
+              showOpen={sending.held.previous.id !== book.id}
+            />
+          )}
+          <ErrorCallout code={sending.error} />
         </div>
 
         <div className="flex flex-col items-center gap-3 md:sticky md:top-20 md:col-start-1 md:row-span-2 md:row-start-1">

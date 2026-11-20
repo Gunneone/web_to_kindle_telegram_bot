@@ -265,8 +265,8 @@ export function BookActions({
   book: Book;
   hasKindle: boolean;
   busy: boolean;
-  /** No target: make the book again without delivering it */
-  onSend: (book: Book, target?: Target) => void;
+  /** No target: make the book again without delivering it. `force`: the user already agreed to a second copy */
+  onSend: (book: Book, target?: Target, force?: boolean) => void;
   /** Offer to delete it (in the history) */
   deletable?: boolean;
   /** Keep the buttons on one line (in a table) */
@@ -286,7 +286,7 @@ export function BookActions({
         onCancel={() => setAsking(null)}
         onConfirm={() => {
           setAsking(null);
-          onSend(book, 'kindle');
+          onSend(book, 'kindle', true);
         }}
       />
     );
@@ -340,7 +340,7 @@ export function BookRow(props: {
   book: Book;
   hasKindle: boolean;
   busy: boolean;
-  onSend: (book: Book, target?: Target) => void;
+  onSend: (book: Book, target?: Target, force?: boolean) => void;
   deletable?: boolean;
 }) {
   const { book } = props;

@@ -1,14 +1,14 @@
-import { useMutation } from '@tanstack/react-query';
 import { IconSearch } from '@tabler/icons-react';
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
+import { AlreadySent } from '../components/AlreadySent';
 import { BookActions, BookBadges, BookRow, BookTitle, failureText, NotArrivedLink, OriginalLink } from '../components/BookRow';
 import { ErrorCallout } from '../components/Callout';
 import { PageHead, Scribble } from '../components/Text';
 import { UnconfirmedCallout } from '../components/Unconfirmed';
 import { useI18n } from '../i18n';
-import { errorCode, HISTORY_SHOWS, resendBook, type Book, type HistoryShow, type Target } from '../lib/api';
-import { placeOf, useAllBooks, useArrivalHint, useRefreshBooks } from '../lib/books';
+import { errorCode, HISTORY_SHOWS, type HistoryShow } from '../lib/api';
+import { placeOf, useAllBooks, useArrivalHint, useSendBook } from '../lib/books';
 import { formatDate } from '../lib/format';
 import { useMe } from '../lib/session';
 import { usePageTitle } from '../lib/title';
@@ -22,7 +22,6 @@ export function History() {
   const { t, lang } = useI18n();
   usePageTitle(t('history.title'));
   const me = useMe();
-  const refresh = useRefreshBooks();
   const hint = useArrivalHint();
   // The search and filter live in the address, so the way back from a book returns to the same list
   const [params, setParams] = useSearchParams();
@@ -30,10 +29,7 @@ export function History() {
   const show = asShow(params.get('show'));
   const [typed, setTyped] = useState(search);
   const books = useAllBooks(search, show);
-  const resend = useMutation({
-    mutationFn: ({ book, target }: { book: Book; target?: Target }) => resendBook(book.id, target),
-    onSuccess: () => void refresh(),
-  });
+  const resend = useSendBook();
 
   const update = (changes: Record<string, string>) =>
     setParams(
@@ -64,7 +60,7 @@ export function History() {
     ? t('history.countOf', { n: total, total: all })
     : t(total === 1 ? 'history.countOne' : 'history.count', { n: total });
   const hasKindle = Boolean(me?.kindle_email);
-  const onSend = (target_book: Book, target?: Target) => resend.mutate({ book: target_book, target });
+  const onSend = resend.send;
 
   return (
     <div className="g1-container">
@@ -119,7 +115,16 @@ export function History() {
           </div>
         </form>
       )}
-      <ErrorCallout code={errorCode(books.error) ?? errorCode(resend.error)} />
+      <ErrorCallout code={errorCode(books.error) ?? resend.error} />
+      {resend.held && (
+        <AlreadySent
+          previous={resend.held.previous}
+          named
+          busy={resend.mutation.isPending}
+          onSend={resend.confirm}
+          onCancel={resend.dismiss}
+        />
+      )}
       {books.isSuccess && rows.length === 0 ? (
         filtered ? (
           <div className="g1-card">
@@ -155,7 +160,7 @@ export function History() {
         <>
           <ul className="m-0 list-none p-0 lg:hidden">
             {rows.map((book) => (
-              <BookRow key={book.id} book={book} hasKindle={hasKindle} busy={resend.isPending} onSend={onSend} deletable />
+              <BookRow key={book.id} book={book} hasKindle={hasKindle} busy={resend.mutation.isPending} onSend={onSend} deletable />
             ))}
           </ul>
           <div className="hidden overflow-x-auto lg:block">
@@ -201,7 +206,7 @@ export function History() {
                         )}
                       </td>
                       <td>
-                        <BookActions book={book} hasKindle={hasKindle} busy={resend.isPending} onSend={onSend} deletable nowrap />
+                        <BookActions book={book} hasKindle={hasKindle} busy={resend.mutation.isPending} onSend={onSend} deletable nowrap />
                       </td>
                     </tr>
                   );

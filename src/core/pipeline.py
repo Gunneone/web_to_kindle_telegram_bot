@@ -82,7 +82,7 @@ class Outcome:
     article_id: int
     book: Book | None = None
     delivered: set[str] = field(default_factory=set)
-    duplicate: db.Article | None = None  # delivered recently, so nothing was done (see `force`)
+    duplicate: db.Article | None = None  # already went to the Kindle, so nothing was done (see `force`)
     failure: Failure | None = None
     error: BaseException | None = None
     file_too_big: int | None = None  # the EPUB's size, when it was too big for Frontend.max_file_bytes
@@ -141,12 +141,13 @@ async def run(user: db.User, url: str, frontend: Frontend, *, targets: set[str] 
     targets:    where to deliver; default is the user's delivery setting. An empty set only
                 builds the EPUB (status READY), for a look before it goes anywhere
     article_id: history entry to reuse (resend, retry); its EPUB is reused while it's still on disk
-    force:      skip the "you already got this" check
+    force:      skip the "this already went to your Kindle" check, which stops a delivery that includes
+                the Kindle when the page went there before (also as another history entry, or this one)
     """
     targets = user.targets if targets is None else targets
 
-    if not force and article_id is None:
-        previous = db.recent_delivery(user.user_id, url)
+    if not force and db.KINDLE in targets:
+        previous = db.kindle_delivery(user.user_id, url)
         if previous:
             return Outcome(previous.id, duplicate=previous)
 

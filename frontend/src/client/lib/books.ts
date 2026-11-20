@@ -1,5 +1,6 @@
-import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
-import { getBook, listBooks, type Book, type HistoryShow } from './api';
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useState } from 'react';
+import { ApiError, errorCode, getBook, listBooks, resendBook, type Book, type HistoryShow, type Target } from './api';
 import { useMe } from './session';
 
 const POLL_MS = 1200;
@@ -68,4 +69,47 @@ export function useBook(id: number) {
 export function useRefreshBooks() {
   const client = useQueryClient();
   return () => client.invalidateQueries({ queryKey: ['books'] });
+}
+
+interface SendVars {
+  book: Book;
+  target?: Target;
+  force?: boolean;
+}
+
+/** A send to the Kindle the server held back: the page went there before, as `previous`. */
+export interface HeldSend {
+  book: Book;
+  target?: Target;
+  previous: Book;
+}
+
+/**
+ * Send a book that is already made (or, with no target, make it again). A send to the Kindle of a page that
+ * went there before is held instead: `held` says which, `confirm` sends it anyway, `dismiss` drops it.
+ */
+export function useSendBook(onSent?: (data: { book: Book }) => void) {
+  const refresh = useRefreshBooks();
+  const [held, setHeld] = useState<HeldSend | null>(null);
+  const mutation = useMutation({
+    mutationFn: ({ book, target, force = false }: SendVars) => resendBook(book.id, target, force),
+    onMutate: () => setHeld(null),
+    onSuccess: (data) => {
+      onSent?.(data);
+      void refresh();
+    },
+    onError: (error, { book, target }) => {
+      if (error instanceof ApiError && error.code === 'DUPLICATE') setHeld({ book, target, previous: error.extra.book as Book });
+    },
+  });
+  const code = errorCode(mutation.error);
+  return {
+    mutation,
+    send: (book: Book, target?: Target, force = false) => mutation.mutate({ book, target, force }),
+    held,
+    confirm: () => held && mutation.mutate({ book: held.book, target: held.target, force: true }),
+    dismiss: () => setHeld(null),
+    /** What went wrong, apart from the held send (that one has its own question) */
+    error: code === 'DUPLICATE' ? null : code,
+  };
 }

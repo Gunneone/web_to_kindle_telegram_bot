@@ -181,11 +181,12 @@ async def delete_book(article_id: int, user: db.User = Depends(book_owner)):
 class NewBook(BaseModel):
     url: str
     target: str | None = None  # None: only build it, for a look before it goes anywhere
-    force: bool = False
+    force: bool = False  # send it to the Kindle even when it went there before (else 409 DUPLICATE)
 
 
 class Resend(BaseModel):
     target: str | None = None  # None: build it again, without delivering (a retry after a failure)
+    force: bool = False  # as for NewBook: this book, or another link to the same page, may be on the Kindle already
 
 
 def _targets(target: str, user: db.User) -> set[str]:
@@ -246,7 +247,9 @@ async def send_book(article_id: int, body: Resend, request: Request, user: db.Us
     if jobs.is_running(article.id):
         raise ApiError(409, 'ALREADY_RUNNING')
     _guard_capacity(user, app)
-    started, outcome = await jobs.start(user, article.article_url, targets, article_id=article.id, force=True)
+    started, outcome = await jobs.start(user, article.article_url, targets, article_id=article.id, force=body.force)
+    if outcome is not None and outcome.duplicate:
+        raise ApiError(409, 'DUPLICATE', book=jobs.serialize(outcome.duplicate))
     if started is None:
         raise ApiError(500, 'UNKNOWN')
     return {'book': jobs.serialize(db.get_article(article.id))}

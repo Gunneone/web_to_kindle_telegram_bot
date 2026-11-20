@@ -150,9 +150,12 @@ export const getBook = (id: number) => request<{ book: Book }>('GET', `/api/book
  */
 export const createBook = (url: string, force = false, target?: Target) =>
   request<{ book: Book }>('POST', '/api/books', target ? { url, force, target } : { url, force });
-/** Delivers a built book; with no target, builds it again (a retry after a failure). */
-export const resendBook = (id: number, target?: Target) =>
-  request<{ book: Book }>('POST', `/api/books/${id}/send`, target ? { target } : {});
+/**
+ * Delivers a built book; with no target, builds it again (a retry after a failure). A send to the Kindle of
+ * a page that went there before fails with DUPLICATE (`extra.book`: that earlier book) unless `force`.
+ */
+export const resendBook = (id: number, target?: Target, force = false) =>
+  request<{ book: Book }>('POST', `/api/books/${id}/send`, target ? { target, force } : {});
 export const sendFeedback = (id: number, reasons: FeedbackReason[], message: string) =>
   request<void>('POST', `/api/books/${id}/feedback`, { reasons, message });
 
