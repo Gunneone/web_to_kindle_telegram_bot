@@ -18,7 +18,8 @@ from web_scraper import Article as WebArticle
 from web_scraper.url_utils import normalize_url
 
 from . import feedback, jobs, preview
-from .deps import State, current_user, request_language, require_user, state
+from .deps import (State, book_owner, client_ip, current_guest, current_user, request_language, require_user,
+                   start_guest, state)
 from .errors import ApiError
 from .texts import LANGUAGES, t
 
@@ -55,6 +56,10 @@ def me_payload(user: db.User, request: Request) -> dict:
         'amazon_settings_url': kindle.amazon_settings_url(chosen=store),
         'amazon_devices_url': kindle.amazon_devices_url(chosen=store),
         'providers': sorted({i.provider for i in accounts.identities(user.user_id)}),
+        # When the last test book went out, so the setup can ask "did it arrive?" after a reload
+        'test_sent_at': jobs.iso(user.test_book_sent_at),
+        # How many books went to the Kindle: the first few get a "not on your Kindle?" hint
+        'kindle_books': db.kindle_count(user.user_id),
     }
 
 
@@ -79,9 +84,11 @@ async def patch_me(body: MePatch, request: Request, user: db.User = Depends(requ
         address = kindle.normalize_email(body.kindle_email)
         if address and not kindle.is_device_email(address):
             raise ApiError(400, 'INVALID_KINDLE_EMAIL')
-        address = address or None
+        address = address or None  # '': remove the address (only ever on an explicit "remove")
         if address != user.kindle_email:
-            fields.update(kindle_email=address, setup_verified=0)
+            fields.update(kindle_email=address, setup_verified=0, test_book_sent_at=None)
+            if address:  # like the bot: an address means "deliver to my Kindle", unless both were chosen
+                fields['delivery_mode'] = db.BOTH if user.delivery_mode == db.BOTH else db.KINDLE
     if body.image_links is not None:
         fields['preserve_image_links'] = int(body.image_links)
     if body.amazon_store is not None:
@@ -122,6 +129,7 @@ async def test_book(request: Request, user: db.User = Depends(require_user), app
     except EmailError as e:
         logger.error(f'Could not send the test book to user {user.user_id}: {e}')
         raise ApiError(502, 'EMAIL_FAILED')
+    db.update_user(user.user_id, test_book_sent_at=db.utcnow())
     return Response(status_code=204)
 
 
@@ -133,9 +141,17 @@ async def setup_verified(request: Request, user: db.User = Depends(require_user)
     return {'user': me_payload(user, request)}
 
 
+MAX_SEARCH_LENGTH = 200
+
+
 @router.get('/books')
-async def list_books(offset: int = 0, limit: int = PAGE_SIZE, user: db.User = Depends(require_user)):
-    articles, total = db.history(user.user_id, max(0, offset), min(max(1, limit), 50))
+async def list_books(offset: int = 0, limit: int = PAGE_SIZE, q: str = '', show: str = '',
+                     user: db.User = Depends(require_user)):
+    """A page of the history; `q` searches titles and links, `show` is one of db.SHOWS (or empty: all)."""
+    if show and show not in db.SHOWS:
+        raise ApiError(400, 'INVALID_REQUEST')
+    articles, total = db.history(user.user_id, max(0, offset), min(max(1, limit), 50),
+                                 search=q[:MAX_SEARCH_LENGTH], show=show or None)
     return {'books': [jobs.serialize(a) for a in articles], 'total': total}
 
 
@@ -147,18 +163,30 @@ def _owned(article_id: int, user: db.User) -> db.Article:
 
 
 @router.get('/books/{article_id}')
-async def get_book(article_id: int, user: db.User = Depends(require_user)):
+async def get_book(article_id: int, user: db.User = Depends(book_owner)):
     return {'book': jobs.serialize(_owned(article_id, user))}
+
+
+@router.delete('/books/{article_id}', status_code=204)
+async def delete_book(article_id: int, user: db.User = Depends(book_owner)):
+    """Remove one book from the history, with its EPUB."""
+    article = _owned(article_id, user)
+    if jobs.is_running(article.id):
+        raise ApiError(409, 'ALREADY_RUNNING')
+    jobs.LIVE.pop(article.id, None)
+    db.delete_article(article.id)
+    return Response(status_code=204)
 
 
 class NewBook(BaseModel):
     url: str
     target: str | None = None  # None: only build it, for a look before it goes anywhere
-    force: bool = False
+    force: bool = False  # send it to the Kindle even when it went there before (else 409 DUPLICATE)
 
 
 class Resend(BaseModel):
     target: str | None = None  # None: build it again, without delivering (a retry after a failure)
+    force: bool = False  # as for NewBook: this book, or another link to the same page, may be on the Kindle already
 
 
 def _targets(target: str, user: db.User) -> set[str]:
@@ -178,13 +206,25 @@ def _clean_url(text: str) -> str:
 
 
 def _guard_capacity(user: db.User, app: State) -> None:
-    if jobs.active_count(user.user_id) >= jobs.MAX_ACTIVE_PER_USER or not app.books_per_user.allow(str(user.user_id)):
+    limit = jobs.MAX_ACTIVE_PER_GUEST if user.is_guest else jobs.MAX_ACTIVE_PER_USER
+    if jobs.active_count(user.user_id) >= limit or not app.books_per_user.allow(str(user.user_id)):
         raise ApiError(429, 'RATE_LIMITED')
 
 
 @router.post('/books', status_code=202)
-async def new_book(body: NewBook, user: db.User = Depends(require_user), app: State = Depends(state)):
+async def new_book(body: NewBook, request: Request, app: State = Depends(state)):
+    """
+    Make a book. Without a sign-in this is a try: the book is only built (to look at and download),
+    under a guest account that moves into the real one when the visitor signs in.
+    """
     url = _clean_url(body.url)
+    user = current_user(request)
+    if user is None:
+        if body.target is not None:  # delivering needs an account with an address
+            raise ApiError(401, 'UNAUTHENTICATED')
+        if not app.guest_books_per_ip.allow(client_ip(request)):
+            raise ApiError(429, 'RATE_LIMITED')
+        user = current_guest(request) or start_guest(request)
     targets = set() if body.target is None else _targets(body.target, user)
     _guard_capacity(user, app)
     article_id, outcome = await jobs.start(user, url, targets, force=body.force)
@@ -196,14 +236,20 @@ async def new_book(body: NewBook, user: db.User = Depends(require_user), app: St
 
 
 @router.post('/books/{article_id}/send', status_code=202)
-async def send_book(article_id: int, body: Resend, user: db.User = Depends(require_user),
+async def send_book(article_id: int, body: Resend, request: Request, user: db.User = Depends(book_owner),
                     app: State = Depends(state)):
+    if user.is_guest and body.target is not None:  # a guest may only retry a failed build
+        raise ApiError(401, 'UNAUTHENTICATED')
+    if user.is_guest and not app.guest_books_per_ip.allow(client_ip(request)):
+        raise ApiError(429, 'RATE_LIMITED')
     article = _owned(article_id, user)
     targets = set() if body.target is None else _targets(body.target, user)
     if jobs.is_running(article.id):
         raise ApiError(409, 'ALREADY_RUNNING')
     _guard_capacity(user, app)
-    started, outcome = await jobs.start(user, article.article_url, targets, article_id=article.id, force=True)
+    started, outcome = await jobs.start(user, article.article_url, targets, article_id=article.id, force=body.force)
+    if outcome is not None and outcome.duplicate:
+        raise ApiError(409, 'DUPLICATE', book=jobs.serialize(outcome.duplicate))
     if started is None:
         raise ApiError(500, 'UNKNOWN')
     return {'book': jobs.serialize(db.get_article(article.id))}
@@ -217,7 +263,9 @@ def _filename(title: str | None) -> str:
 def _built(article_id: int, user: db.User) -> db.Article:
     """The user's book with its EPUB on disk."""
     article = _owned(article_id, user)
-    if article.status == db.PROCESSING or not article.epub_path:  # nothing built (yet)
+    # Nothing built yet. The path is only stored once the file is complete, and a book that has one is never
+    # rebuilt (a resend reuses it), so it can be served while it is being re-sent, and after a restart
+    if not article.epub_path:
         raise ApiError(404, 'NOT_FOUND')
     if not os.path.exists(article.epub_path):
         raise ApiError(410, 'FILE_GONE')  # the disk monitor cleans up old books
@@ -225,7 +273,7 @@ def _built(article_id: int, user: db.User) -> db.Article:
 
 
 @router.get('/books/{article_id}/preview')
-async def preview_book(article_id: int, request: Request, user: db.User = Depends(require_user)):
+async def preview_book(article_id: int, request: Request, user: db.User = Depends(book_owner)):
     article = _built(article_id, user)
     try:
         page = await asyncio.to_thread(preview.render, article.epub_path, article.title,
@@ -263,6 +311,7 @@ async def book_feedback(article_id: int, body: Feedback, user: db.User = Depends
 
 @router.get('/books/{article_id}/epub')
 async def download_book(article_id: int, user: db.User = Depends(require_user)):
+    """The EPUB file. Only for signed-in accounts: a visitor may look at the preview, then sign in to keep it."""
     article = _built(article_id, user)
     return FileResponse(article.epub_path, media_type='application/epub+zip', filename=_filename(article.title),
                         headers={'Cache-Control': 'private, no-store'})

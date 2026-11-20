@@ -131,6 +131,17 @@ def _clean(body, book: zipfile.ZipFile, doc: str, types: dict[str, str]) -> None
                 del tag['href']  # links between chapters: the preview is one scrolling page
 
 
+def word_count(epub_path: str) -> int:
+    """How many words the book's chapters hold; 0 when the EPUB can't be read."""
+    try:
+        with zipfile.ZipFile(epub_path) as book:
+            order, _ = _spine(book)
+            text = ' '.join(BeautifulSoup(_read(book, doc), 'html.parser').get_text(' ') for doc in order)
+    except (OSError, zipfile.BadZipFile, PreviewError):
+        return 0
+    return len(text.split())
+
+
 def render(epub_path: str, title: str | None = None, lang: str = 'en') -> str:
     """The book as one HTML page. Raises PreviewError when the EPUB can't be read."""
     try:

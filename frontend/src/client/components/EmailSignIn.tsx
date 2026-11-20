@@ -4,15 +4,18 @@ import { useI18n } from '../i18n';
 import { ApiError, startEmailSignIn, verifyEmailCode } from '../lib/api';
 import { ErrorCallout } from './Callout';
 
-/** Email, then the 6-digit code from the mail. Calls `onDone` once the code is accepted. */
-export function EmailSignIn({ onDone }: { onDone: () => void }) {
+/**
+ * Email, then the 6-digit code from the mail. Calls `onDone` once the code is accepted. The mail also has a
+ * link that signs in on its own; it leads to `next` afterwards.
+ */
+export function EmailSignIn({ onDone, next = '/' }: { onDone: () => void; next?: string }) {
   const { t, lang } = useI18n();
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
   const [sentTo, setSentTo] = useState<string | null>(null);
 
   const start = useMutation({
-    mutationFn: (address: string) => startEmailSignIn(address, lang),
+    mutationFn: (address: string) => startEmailSignIn(address, lang, next),
     onSuccess: (_data, address) => {
       setSentTo(address);
       setCode('');

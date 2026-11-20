@@ -1,0 +1,21 @@
+/* The sample book on the start page. Same look as a real preview (src/web/preview.py READER_CSS). */
+:root { color-scheme: light; }
+html { background: #f1f1ec; scrollbar-width: none; }
+html::-webkit-scrollbar { display: none; }
+body {
+  margin: 0; padding: 16px 16px 20px; color: #161616; background: #f1f1ec;
+  font: 14.5px/1.55 "Bookerly", "Literata", Charter, "Iowan Old Style", Georgia, serif;
+  text-align: justify; hyphens: auto; -webkit-hyphens: auto; overflow-wrap: break-word;
+  -webkit-text-size-adjust: 100%; text-rendering: optimizeLegibility;
+}
+h1, h2, h3, h4, h5, h6, figcaption, pre, table { text-align: left; hyphens: manual; }
+h1 { font-size: 1.45em; line-height: 1.25; }
+img, svg, video { max-width: 100% !important; height: auto !important; filter: grayscale(1); }
+pre, code { white-space: pre-wrap; font-size: 0.85em; }
+table { max-width: 100%; display: block; overflow-x: auto; }
+a { color: inherit; }
+hr.eselsohr-break { border: 0; border-top: 1px solid #c8c8c2; margin: 2em 0; }
+.byline { color: #6b6b68; font-size: 0.85em; text-align: left; margin-top: -0.4em; }
+ol { padding-left: 1.4em; }
+li { margin-bottom: 0.4em; }
+.end { text-align: center; color: #6b6b68; margin-top: 2.5em; }

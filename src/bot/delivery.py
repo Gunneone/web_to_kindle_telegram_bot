@@ -196,9 +196,10 @@ async def deliver(bot: Bot, tg_user, chat_id: int, url: str, *, reply_to_id: int
     if outcome.duplicate:
         previous = outcome.duplicate
         await bot.send_message(
-            chat_id, t(lang, 'duplicate', title=previous.title or host(url),
+            chat_id, t(lang, for_device('duplicate', user.kindle_email), title=previous.title or host(url),
                        date=format_date(lang, previous.timestamp)),
-            reply_markup=keyboards.duplicate(lang, previous.id), reply_parameters=reply_to(reply_to_id))
+            reply_markup=keyboards.duplicate(lang, previous.id, kindle_only=targets == {db.KINDLE}),
+            reply_parameters=reply_to(reply_to_id))
     elif outcome.failure:
         await _show_error(progress, lang, outcome, url)
         if outcome.failure not in pipeline.USER_FACING:

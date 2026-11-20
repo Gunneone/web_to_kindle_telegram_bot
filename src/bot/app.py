@@ -27,6 +27,7 @@ logger = logging.getLogger(__name__)
 PRIVATE = filters.UpdateType.MESSAGE & filters.ChatType.PRIVATE
 
 ALLOWED_UPDATES = [Update.MESSAGE, Update.CALLBACK_QUERY, Update.GUEST_MESSAGE]
+STARTUP_RETRIES = 10  # attempts to reach Telegram on startup before giving up, see main()
 
 
 def is_transient(error: BaseException | None) -> bool:
@@ -84,4 +85,8 @@ def build_application(token: str = TOKEN) -> Application:
 
 def main() -> None:
     db.init_db()
-    build_application().run_polling(allowed_updates=ALLOWED_UPDATES)
+    # Containers can start before the network is up (Docker starting, the host waking from sleep), so
+    # keep trying to reach Telegram instead of crashing on the first attempt. The library waits 1 s,
+    # then 1.5 times longer each time up to 30 s: about 1¾ minutes in all, after which the bot exits
+    # and Docker restarts it. A wrong token still fails at once.
+    build_application().run_polling(allowed_updates=ALLOWED_UPDATES, bootstrap_retries=STARTUP_RETRIES)

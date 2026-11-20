@@ -66,7 +66,7 @@ class Book:
 
     @property
     def read_minutes(self) -> int | None:
-        return max(1, round(self.words / WORDS_PER_MINUTE)) if self.words else None
+        return read_minutes(self.words)
 
     @property
     def size(self) -> int | None:
@@ -82,7 +82,7 @@ class Outcome:
     article_id: int
     book: Book | None = None
     delivered: set[str] = field(default_factory=set)
-    duplicate: db.Article | None = None  # delivered recently, so nothing was done (see `force`)
+    duplicate: db.Article | None = None  # already went to the Kindle, so nothing was done (see `force`)
     failure: Failure | None = None
     error: BaseException | None = None
     file_too_big: int | None = None  # the EPUB's size, when it was too big for Frontend.max_file_bytes
@@ -108,6 +108,11 @@ class Frontend:
 
 def host(url: str) -> str:
     return urlparse(url).netloc.removeprefix('www.') or url
+
+
+def read_minutes(words: int | None) -> int | None:
+    """Reading time in whole minutes, at least one; None when the words weren't counted."""
+    return max(1, round(words / WORDS_PER_MINUTE)) if words else None
 
 
 def word_count(html: str) -> int:
@@ -136,20 +141,24 @@ async def run(user: db.User, url: str, frontend: Frontend, *, targets: set[str] 
     targets:    where to deliver; default is the user's delivery setting. An empty set only
                 builds the EPUB (status READY), for a look before it goes anywhere
     article_id: history entry to reuse (resend, retry); its EPUB is reused while it's still on disk
-    force:      skip the "you already got this" check
+    force:      skip the "this already went to your Kindle" check, which stops a delivery that includes
+                the Kindle when the page went there before (also as another history entry, or this one)
     """
     targets = user.targets if targets is None else targets
 
-    if not force and article_id is None:
-        previous = db.recent_delivery(user.user_id, url)
+    if not force and db.KINDLE in targets:
+        previous = db.kindle_delivery(user.user_id, url)
         if previous:
             return Outcome(previous.id, duplicate=previous)
 
     article = db.get_article(article_id) if article_id else None
     if article is None:
         article = db.create_article(user.user_id, url)
-    reuse = (article_id is not None and article.status in (*db.DELIVERED, db.READY, None)
-             and bool(article.epub_path) and os.path.exists(article.epub_path))
+    # A book that was built goes out again as it is: also after a failed or interrupted delivery, so a
+    # retry doesn't depend on the site still serving the page. epub_path is only stored once the file is
+    # complete, so whatever it points to is a whole book
+    reuse = article_id is not None and bool(article.epub_path) and os.path.exists(article.epub_path)
+    unsettled = article.status in (db.FAILED, db.PROCESSING)  # a failed or interrupted earlier attempt
 
     await frontend.stage(Stage.RECEIVED, article)
     user_slots = USER_SLOTS[user.user_id]
@@ -164,7 +173,7 @@ async def run(user: db.User, url: str, frontend: Frontend, *, targets: set[str] 
             if reuse:
                 paywalled = article.paywalled if article.paywalled is not None else article.status == db.PREVIEW
                 book = Book(title=article.title or host(url), url=url, epub_path=article.epub_path,
-                            is_preview=bool(paywalled))
+                            words=article.words or None, is_preview=bool(paywalled))
             else:
                 await frontend.stage(Stage.FETCHING, article)
                 content = await asyncio.to_thread(get_website_content, url)
@@ -174,7 +183,8 @@ async def run(user: db.User, url: str, frontend: Frontend, *, targets: set[str] 
                 book = Book(title=content.Title or host(url), url=url, epub_path=epub_path,
                             author=content.Author, publication=content.Publication,
                             words=words, is_preview=bool(content.Is_Preview))
-                db.update_article(article.id, title=book.title, epub_path=epub_path, paywalled=int(book.is_preview))
+                db.update_article(article.id, title=book.title, epub_path=epub_path, paywalled=int(book.is_preview),
+                                  words=words)
 
             if db.KINDLE in targets:
                 await frontend.stage(Stage.SENDING, article)
@@ -197,18 +207,19 @@ async def run(user: db.User, url: str, frontend: Frontend, *, targets: set[str] 
                 logger.error(f"Could not email {url} to user {user.user_id}: {e}")
             else:
                 logger.exception(f"Error processing URL {url}")
-            if not reuse:
+            if not reuse or unsettled:  # a book that went out before stays sent
                 db.update_article(article.id, status=db.FAILED, error=str(e)[:500])
             return Outcome(article.id, book, delivered, failure=failure, error=e, file_too_big=too_big)
 
         if delivered:
             db.update_article(article.id, status=db.PREVIEW if book.is_preview else db.SENT, error=None,
-                              timestamp=db.utcnow())
+                              timestamp=db.utcnow(),
+                              delivered=','.join(sorted(db.delivered_targets(article) | delivered)))
             if db.KINDLE in delivered:
                 db.update_user(user.user_id, last_book_received_date=date.today().isoformat())
             logger.info(f"Delivered '{book.title}' to user {user.user_id} via {sorted(delivered)}")
         elif not targets:
-            if not reuse:
+            if not reuse or unsettled:
                 db.update_article(article.id, status=db.READY, error=None)
             logger.info(f"Built '{book.title}' for user {user.user_id}, not delivered yet")
         elif not reuse:

@@ -1,15 +1,13 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { IconArrowUpRight, IconCopy } from '@tabler/icons-react';
-import { useState, type FormEvent } from 'react';
-import { useNavigate, useSearchParams } from 'react-router';
+import { useState } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router';
 import { Callout, ErrorCallout } from '../components/Callout';
 import { EmailSignIn } from '../components/EmailSignIn';
+import { Saved, useSavedFlash } from '../components/Saved';
 import { PageHead, SectionHead } from '../components/Text';
 import { LANGS, LANGUAGE_NAMES, useI18n, type Lang } from '../i18n';
 import {
-  confirmSetup,
   deleteMe,
-  sendTestBook,
   signInUrl,
   signOut,
   updateMe,
@@ -18,155 +16,46 @@ import {
   type Provider,
 } from '../lib/api';
 import { useMe, useResetSession, useSession, useSetUser } from '../lib/session';
+import { usePageTitle } from '../lib/title';
 
+/**
+ * The e-reader at a glance; setting it up, changing or removing the address happens in the setup (/setup).
+ * Any other reader needs no setting: every book can be downloaded.
+ */
 function KindleSection({ me }: { me: Me }) {
   const { t } = useI18n();
-  const setUser = useSetUser();
-  const [address, setAddress] = useState(me.kindle_email ?? '');
-  const [copied, setCopied] = useState(false);
-  const [testSent, setTestSent] = useState(false);
-
-  const save = useMutation({
-    mutationFn: (value: string) => updateMe({ kindle_email: value }),
-    onSuccess: ({ user }) => {
-      setUser(user);
-      setAddress(user.kindle_email ?? '');
-      setTestSent(false);
-    },
-  });
-  const test = useMutation({ mutationFn: sendTestBook, onSuccess: () => setTestSent(true) });
-  const arrived = useMutation({ mutationFn: confirmSetup, onSuccess: ({ user }) => setUser(user) });
-  const store = useMutation({
-    mutationFn: (value: string) => updateMe({ amazon_store: value }),
-    onSuccess: ({ user }) => setUser(user),
-  });
-  const error = (save.error ?? test.error ?? arrived.error ?? store.error) as ApiError | null;
-
-  const submit = (event: FormEvent) => {
-    event.preventDefault();
-    save.mutate(address.trim());
-  };
-  const copy = async () => {
-    if (!me.sender_email) return;
-    try {
-      await navigator.clipboard.writeText(me.sender_email);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      /* clipboard blocked: the address is selectable on screen */
-    }
-  };
-
-  // A PocketBook address works too, with its own steps 2 and 3: PocketBook has no sender list to fill
-  // in, it emails its owner to confirm a new sender. Everything else stays about the Kindle.
-  const pocketbook = me.device === 'pocketbook';
-
   return (
     <section className="g1-section">
       <SectionHead eyebrow={t('settings.kindle.eyebrow')} title={t('settings.kindle.title')} />
       <div className="g1-stack">
-        {me.setup_verified && me.kindle_email && (
-          <Callout tone="success">
-            {t(pocketbook ? 'settings.kindle.pocketbook.connected' : 'settings.kindle.connected')}
-          </Callout>
-        )}
-        <p className="m-0 text-muted">
-          {t('settings.kindle.step1')}{' '}
-          <a className="g1-link inline-flex items-center gap-1" href={me.amazon_devices_url} target="_blank" rel="noopener noreferrer">
-            {t('settings.kindle.findAddressLink')} <IconArrowUpRight className="g1-icon" aria-hidden />
-          </a>
-        </p>
-        {!pocketbook && (
-          <div>
-            <label className="g1-label" htmlFor="amazon-store">
-              {t('settings.kindle.storeLabel')}
-            </label>
-            <select
-              id="amazon-store"
-              className="g1-select"
-              aria-describedby="amazon-store-help"
-              value={me.amazon_store}
-              disabled={store.isPending}
-              onChange={(event) => store.mutate(event.target.value)}
-            >
-              {me.amazon_stores.map((domain) => (
-                <option key={domain} value={domain}>
-                  {domain}
-                </option>
-              ))}
-            </select>
-            <span id="amazon-store-help" className="mt-1 block text-sm text-muted">
-              {t(me.amazon_store_chosen ? 'settings.kindle.storeHelpChosen' : 'settings.kindle.storeHelpGuessed')}
-            </span>
-          </div>
-        )}
-        <p className="m-0 text-sm text-muted">{t('settings.kindle.pocketbookHint')}</p>
-        <form onSubmit={submit} className="g1-stack">
-          <div>
-            <label className="g1-label" htmlFor="kindle-address">
-              {t('settings.kindle.addressLabel')}
-            </label>
-            <input
-              id="kindle-address"
-              className="g1-input"
-              type="email"
-              autoComplete="off"
-              placeholder={t('settings.kindle.addressPlaceholder')}
-              value={address}
-              onChange={(event) => setAddress(event.target.value)}
-            />
-          </div>
-          <div>
-            <button type="submit" className="g1-btn" disabled={save.isPending || address.trim() === (me.kindle_email ?? '')}>
-              {save.isSuccess && address.trim() === (me.kindle_email ?? '') ? t('common.saved') : t('common.save')}
-            </button>
-          </div>
-        </form>
-
-        {me.kindle_email && (
+        {me.kindle_email ? (
           <>
-            <p className="m-0 text-muted">
-              {t(pocketbook ? 'settings.kindle.pocketbook.step2' : 'settings.kindle.step2')}
+            <p className="m-0 flex flex-wrap items-center gap-3">
+              <code className="g1-mono break-all">{me.kindle_email}</code>
+              <span className={me.setup_verified ? 'g1-badge g1-badge--primary' : 'g1-badge text-warning [--g1-edge:var(--g1-warning)]'}>
+                {t(me.setup_verified ? 'settings.kindle.verified' : 'settings.kindle.unverified')}
+              </span>
             </p>
-            {me.sender_email ? (
-              <div className="flex flex-wrap items-center gap-2">
-                <code className="g1-mono select-all bg-surface-2 px-3 py-2">{me.sender_email}</code>
-                <button type="button" className="g1-btn g1-btn--sm" onClick={() => void copy()}>
-                  <IconCopy className="g1-icon" aria-hidden />
-                  {copied ? t('common.copied') : t('common.copy')}
-                </button>
-                {!pocketbook && (
-                  <a className="g1-link inline-flex items-center gap-1" href={me.amazon_settings_url} target="_blank" rel="noopener noreferrer">
-                    {t('settings.kindle.amazonLink')} <IconArrowUpRight className="g1-icon" aria-hidden />
-                  </a>
-                )}
-              </div>
-            ) : (
-              <Callout tone="warning">{t('settings.kindle.noSender')}</Callout>
-            )}
-
-            <p className="m-0 text-muted">
-              {t(pocketbook ? 'settings.kindle.pocketbook.step3' : 'settings.kindle.step3')}
-            </p>
-            <div className="flex flex-wrap gap-2">
-              <button type="button" className="g1-btn" disabled={test.isPending} onClick={() => test.mutate()}>
-                {t('settings.kindle.testBook')}
-              </button>
-              {testSent && !me.setup_verified && (
-                <button type="button" className="g1-btn g1-btn--primary" disabled={arrived.isPending} onClick={() => arrived.mutate()}>
-                  {t('settings.kindle.arrived')}
-                </button>
-              )}
+            <div className="flex flex-wrap items-center gap-2">
+              <Link to="/setup?step=address" className="g1-btn g1-btn--sm">
+                {t('settings.kindle.change')}
+              </Link>
+              <Link to="/setup" className={me.setup_verified ? 'g1-btn g1-btn--sm g1-btn--ghost' : 'g1-btn g1-btn--sm g1-btn--primary'}>
+                {t('settings.kindle.openSetup')}
+              </Link>
             </div>
-            {testSent && !me.setup_verified && (
-              <Callout tone="info">
-                {t(pocketbook ? 'settings.kindle.pocketbook.testSent' : 'settings.kindle.testSent', { email: me.kindle_email ?? '' })}{' '}
-                {t(pocketbook ? 'settings.kindle.pocketbook.notArrived' : 'settings.kindle.notArrived')}
-              </Callout>
-            )}
+          </>
+        ) : (
+          <>
+            <p className="m-0 text-muted">{t('settings.kindle.none')}</p>
+            <div>
+              <Link to="/setup" className="g1-btn g1-btn--sm g1-btn--primary">
+                {t('settings.kindle.setup')}
+              </Link>
+            </div>
           </>
         )}
-        <ErrorCallout code={error?.code} />
+        <p className="mb-0 text-sm text-muted">{t('settings.kindle.otherReaders')}</p>
       </div>
     </section>
   );
@@ -175,9 +64,13 @@ function KindleSection({ me }: { me: Me }) {
 function BooksSection({ me }: { me: Me }) {
   const { t } = useI18n();
   const setUser = useSetUser();
+  const [saved, flash] = useSavedFlash();
   const toggle = useMutation({
     mutationFn: (value: boolean) => updateMe({ image_links: value }),
-    onSuccess: ({ user }) => setUser(user),
+    onSuccess: ({ user }) => {
+      setUser(user);
+      flash();
+    },
   });
   return (
     <section className="g1-section">
@@ -195,6 +88,7 @@ function BooksSection({ me }: { me: Me }) {
             <span className="block text-sm text-muted">{t('settings.books.imageLinksHelp')}</span>
           </span>
         </label>
+        <Saved show={saved} />
         <ErrorCallout code={(toggle.error as ApiError | null)?.code} />
       </div>
     </section>
@@ -207,8 +101,9 @@ function AccountSection({ me }: { me: Me }) {
   const session = useSession();
   const reset = useResetSession();
   const client = useQueryClient();
-  const [confirming, setConfirming] = useState(false);
   const [connectingEmail, setConnectingEmail] = useState(false);
+  const [languageSaved, flashLanguage] = useSavedFlash();
+  const language = useMutation({ mutationFn: setLang, onSuccess: flashLanguage });
 
   const leave = async () => {
     await reset();
@@ -217,7 +112,6 @@ function AccountSection({ me }: { me: Me }) {
     await session.refetch();
   };
   const out = useMutation({ mutationFn: signOut, onSuccess: leave });
-  const remove = useMutation({ mutationFn: deleteMe, onSuccess: leave });
   const providers = session.data?.providers;
   const connectable = (['telegram', 'google'] as const).filter((p) => providers?.[p] && !me.providers.includes(p));
 
@@ -226,15 +120,22 @@ function AccountSection({ me }: { me: Me }) {
       <SectionHead eyebrow={t('settings.account.eyebrow')} title={t('settings.account.title')} />
       <div className="g1-stack">
         <div>
-          <label className="g1-label" htmlFor="language">
-            {t('settings.account.language')}
-          </label>
+          <div className="g1-label">{t('settings.account.signedInAs')}</div>
+          <p className="m-0 break-all font-medium">{signedInAs(me, t)}</p>
+        </div>
+        <div>
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <label className="g1-label" htmlFor="language">
+              {t('settings.account.language')}
+            </label>
+            <Saved show={languageSaved} />
+          </div>
           <select
             id="language"
             className="g1-select"
             aria-describedby="language-help"
             value={lang}
-            onChange={(event) => setLang(event.target.value as Lang)}
+            onChange={(event) => language.mutate(event.target.value as Lang)}
           >
             {LANGS.map((code) => (
               <option key={code} value={code} lang={code}>
@@ -260,46 +161,83 @@ function AccountSection({ me }: { me: Me }) {
         </div>
         <div className="flex flex-wrap gap-2">
           {connectable.map((provider) => (
-            <a key={provider} className="g1-btn g1-btn--sm" href={signInUrl(provider, '/settings')}>
-              {t('settings.account.connect')} {t(`settings.account.providers.${provider}`)}
+            <a key={provider} className="g1-btn" href={signInUrl(provider, '/settings')}>
+              {t('settings.account.connect', { provider: t(`settings.account.providers.${provider}`) })}
             </a>
           ))}
           {!me.providers.includes('email') && !connectingEmail && (
-            <button type="button" className="g1-btn g1-btn--sm" onClick={() => setConnectingEmail(true)}>
+            <button type="button" className="g1-btn" onClick={() => setConnectingEmail(true)}>
               {t('settings.account.connectEmail')}
             </button>
           )}
         </div>
-        {connectingEmail && <EmailSignIn onDone={() => void reset().then(() => setConnectingEmail(false))} />}
-        <div className="flex flex-wrap gap-2">
+        {connectingEmail && <EmailSignIn next="/settings" onDone={() => void reset().then(() => setConnectingEmail(false))} />}
+        <div className="border-t border-line pt-5">
           <button type="button" className="g1-btn" disabled={out.isPending} onClick={() => out.mutate()}>
             {t('settings.account.signOut')}
           </button>
-          {!confirming && (
-            <button type="button" className="g1-btn text-danger [--g1-edge:var(--g1-danger)]" onClick={() => setConfirming(true)}>
-              {t('settings.account.deleteAccount')}
-            </button>
-          )}
         </div>
-        {confirming && (
+        <ErrorCallout code={((language.error ?? out.error) as ApiError | null)?.code} />
+      </div>
+    </section>
+  );
+}
+
+/** Who this is: the email address, else the Telegram name (a Telegram account has no address). */
+function signedInAs(me: Me, t: ReturnType<typeof useI18n>['t']) {
+  if (me.email) return me.email;
+  if (me.name && me.providers.includes('telegram')) return t('settings.account.telegramName', { name: me.name });
+  return me.name ?? '';
+}
+
+/** Deleting the account, at the very bottom and well away from "Sign out", so nobody hits it by accident. */
+function DangerSection() {
+  const { t } = useI18n();
+  const navigate = useNavigate();
+  const session = useSession();
+  const reset = useResetSession();
+  const client = useQueryClient();
+  const [confirming, setConfirming] = useState(false);
+  const remove = useMutation({
+    mutationFn: deleteMe,
+    onSuccess: async () => {
+      await reset();
+      client.clear();
+      navigate('/', { replace: true });
+      await session.refetch();
+    },
+  });
+  return (
+    <section className="g1-section">
+      <SectionHead eyebrow={t('settings.danger.eyebrow')} title={t('settings.danger.title')} />
+      <div className="g1-card g1-stack [--g1-edge:var(--g1-danger)]">
+        <p className="m-0 text-muted">{t('settings.danger.text')}</p>
+        {confirming ? (
           <Callout tone="danger" title={t('settings.account.deleteTitle')}>
             {t('settings.account.deleteText')}
-            <div className="mt-3 flex gap-2">
+            <div className="mt-3 flex flex-wrap gap-2">
               <button
                 type="button"
-                className="g1-btn g1-btn--sm text-danger [--g1-edge:var(--g1-danger)]"
+                className="g1-btn text-danger [--g1-edge:var(--g1-danger)]"
                 disabled={remove.isPending}
+                autoFocus
                 onClick={() => remove.mutate()}
               >
                 {t('settings.account.deleteConfirm')}
               </button>
-              <button type="button" className="g1-btn g1-btn--sm g1-btn--ghost" onClick={() => setConfirming(false)}>
+              <button type="button" className="g1-btn g1-btn--ghost" onClick={() => setConfirming(false)}>
                 {t('common.cancel')}
               </button>
             </div>
           </Callout>
+        ) : (
+          <div>
+            <button type="button" className="g1-btn text-danger [--g1-edge:var(--g1-danger)]" onClick={() => setConfirming(true)}>
+              {t('settings.account.deleteAccount')}
+            </button>
+          </div>
         )}
-        <ErrorCallout code={((out.error ?? remove.error) as ApiError | null)?.code} />
+        <ErrorCallout code={(remove.error as ApiError | null)?.code} />
       </div>
     </section>
   );
@@ -307,6 +245,7 @@ function AccountSection({ me }: { me: Me }) {
 
 export function Settings() {
   const { t } = useI18n();
+  usePageTitle(t('settings.title'));
   const me = useMe();
   const [params] = useSearchParams();
   if (!me) return null;
@@ -317,6 +256,7 @@ export function Settings() {
       <KindleSection me={me} />
       <BooksSection me={me} />
       <AccountSection me={me} />
+      <DangerSection />
     </div>
   );
 }

@@ -26,6 +26,7 @@ router = APIRouter(prefix='/api/auth')
 class EmailStart(BaseModel):
     email: str
     lang: str | None = None
+    next: str = '/'  # where the link in the mail leads after signing in
 
 
 class EmailVerify(BaseModel):
@@ -44,7 +45,8 @@ async def email_start(body: EmailStart, request: Request, app: State = Depends(s
     lang = pick_language(body.lang, request_language(request))
     code, token = app.codes.issue(email)
     try:
-        await asyncio.to_thread(auth_email.send_code, app.settings, email, code, token, lang)
+        await asyncio.to_thread(auth_email.send_code, app.settings, email, code, token, lang,
+                                safe_next(body.next))
     except EmailError as e:
         logger.error(f'Could not mail a sign-in code: {e}')
         raise ApiError(502, 'EMAIL_FAILED')

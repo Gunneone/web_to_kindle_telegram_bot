@@ -70,6 +70,9 @@ Thumbs.db
 
 # Project specific
 *.html
+# ...except the web client's page and the sample book on its start page
+!frontend/src/client/index.html
+!frontend/public/sample/*.html
 *.epub
 *.db
 *.db-wal
@@ -77,8 +80,6 @@ Thumbs.db
 users.db
 
 # Web client
-# The client's entry page is source, not scraped output (*.html above)
-!frontend/src/client/index.html
 frontend/node_modules/
 frontend/dist/
 

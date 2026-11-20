@@ -125,7 +125,7 @@ class PipelineTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.mailed, [])
         article = db.get_article(built.article_id)
         self.assertEqual((article.status, article.paywalled, article.error), (db.READY, 1, None))
-        self.assertIsNone(db.recent_delivery(self.user.user_id, 'https://e.com/post'))  # not delivered yet
+        self.assertIsNone(db.kindle_delivery(self.user.user_id, 'https://e.com/post'))  # not delivered yet
 
         sent = await pipeline.run(self.user, 'https://e.com/post', FakeFrontend(), targets={db.KINDLE},
                                   article_id=built.article_id, force=True)
@@ -148,6 +148,58 @@ class PipelineTest(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(forced.ok)
         self.assertNotEqual(forced.article_id, first.article_id)
         self.assertEqual(len(self.scraped), 2)
+
+    async def test_any_earlier_kindle_delivery_counts_however_long_ago(self):
+        first = await pipeline.run(self.user, 'https://e.com/post', FakeFrontend())
+        db.update_article(first.article_id, timestamp=db.utcnow().replace(year=2020))
+        again = await pipeline.run(self.user, 'https://e.com/post', FakeFrontend())
+        self.assertEqual(again.duplicate.id, first.article_id)
+
+    async def test_other_links_to_the_same_page_count(self):
+        first = await pipeline.run(self.user, 'https://e.com/post', FakeFrontend())
+        for url in ('http://www.E.com/post/', 'https://e.com/post#comments', 'https://e.com/post?utm_source=x'):
+            again = await pipeline.run(self.user, url, FakeFrontend())
+            self.assertEqual(again.duplicate and again.duplicate.id, first.article_id, url)
+        other = await pipeline.run(self.user, 'https://e.com/post?page=2', FakeFrontend())
+        self.assertIsNone(other.duplicate)
+        self.assertTrue(other.ok)
+
+    async def test_only_the_kindle_counts(self):
+        chat = db.update_user(self.user.user_id, delivery_mode=db.TELEGRAM)
+        await pipeline.run(chat, 'https://e.com/post', FakeFrontend())
+        again = await pipeline.run(chat, 'https://e.com/post', FakeFrontend())  # a file in the chat, again
+        self.assertIsNone(again.duplicate)
+        self.assertTrue(again.ok)
+        built = await pipeline.run(self.user, 'https://e.com/post', FakeFrontend(), targets=set())
+        self.assertIsNone(built.duplicate)
+        to_kindle = await pipeline.run(self.user, 'https://e.com/post', FakeFrontend(), targets={db.KINDLE})
+        self.assertTrue(to_kindle.ok)  # nothing went to the Kindle yet
+
+        # Now it has: a book only built for a look doesn't ask, sending that one to the Kindle does
+        looked = await pipeline.run(self.user, 'https://e.com/post', FakeFrontend(), targets=set())
+        self.assertIsNone(looked.duplicate)
+        held = await pipeline.run(self.user, 'https://e.com/post', FakeFrontend(), targets={db.KINDLE},
+                                  article_id=looked.article_id)
+        self.assertEqual(held.duplicate.id, to_kindle.article_id)
+        self.assertEqual(db.get_article(looked.article_id).status, db.READY)
+        sent = await pipeline.run(self.user, 'https://e.com/post', FakeFrontend(), targets={db.KINDLE},
+                                  article_id=looked.article_id, force=True)
+        self.assertEqual(sent.delivered, {db.KINDLE})
+
+    async def test_resending_a_book_already_on_the_kindle_asks(self):
+        first = await pipeline.run(self.user, 'https://e.com/post', FakeFrontend())
+        again = await pipeline.run(self.user, 'https://e.com/post', FakeFrontend(), article_id=first.article_id)
+        self.assertEqual(again.duplicate.id, first.article_id)
+        self.assertEqual(len(self.mailed), 1)
+
+    async def test_sends_from_before_delivery_was_recorded_count(self):
+        old = db.create_article(self.user.user_id, 'https://e.com/post')
+        db.update_article(old.id, status=None, delivered=None)  # as old rows look
+        again = await pipeline.run(self.user, 'https://e.com/post', FakeFrontend())
+        self.assertEqual(again.duplicate.id, old.id)
+        failed = db.create_article(self.user.user_id, 'https://e.com/other')
+        db.update_article(failed.id, status=db.FAILED)
+        self.assertIsNone(db.kindle_delivery(self.user.user_id, 'https://e.com/other'))
 
     async def test_resend_reuses_the_epub(self):
         first = await pipeline.run(self.user, 'https://e.com/post', FakeFrontend())

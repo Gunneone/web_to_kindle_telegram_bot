@@ -149,7 +149,7 @@ TEXTS = {
         'btn_retry': "🔁 Retry",
         'btn_open_link': "🔗 Open link",
         'btn_send_again': "🔁 Send again",
-        'duplicate': "📚 You already got “{title}” on {date}.",
+        'duplicate': "📚 You already sent “{title}” to your Kindle on {date}. Send it again anyway?",
         'file_too_big': "⚠️ The EPUB is {size}, more than Telegram allows bots to send (50 MB).",
         'article_gone': "I can't find this book any more.",
 
@@ -281,6 +281,7 @@ TEXTS = {
         'offer_pending_pocketbook': "Want “{title}” on your PocketBook too?",
         'btn_send_to_kindle_pocketbook': "📖 Send it to PocketBook",
         'test_book_title_pocketbook': "Your PocketBook setup works!",
+        'duplicate_pocketbook': "📚 You already sent “{title}” to your PocketBook on {date}. Send it again anyway?",
 
         'months': "Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec",
     },
@@ -413,7 +414,7 @@ TEXTS = {
         'btn_retry': "🔁 Nochmal versuchen",
         'btn_open_link': "🔗 Link öffnen",
         'btn_send_again': "🔁 Nochmal senden",
-        'duplicate': "📚 Du hast „{title}“ schon am {date} bekommen.",
+        'duplicate': "📚 Du hast „{title}“ schon am {date} an deinen Kindle geschickt. Trotzdem nochmal senden?",
         'file_too_big': "⚠️ Die EPUB-Datei ist {size} groß, mehr als Telegram Bots erlaubt (50 MB).",
         'article_gone': "Dieses Buch finde ich nicht mehr.",
 
@@ -539,6 +540,8 @@ TEXTS = {
         'offer_pending_pocketbook': "Möchtest du „{title}“ auch auf deinem PocketBook?",
         'btn_send_to_kindle_pocketbook': "📖 An PocketBook senden",
         'test_book_title_pocketbook': "Deine PocketBook-Einrichtung funktioniert!",
+        'duplicate_pocketbook': ("📚 Du hast „{title}“ schon am {date} an dein PocketBook geschickt. "
+                                 "Trotzdem nochmal senden?"),
 
         'months': "Jan. Feb. März Apr. Mai Juni Juli Aug. Sep. Okt. Nov. Dez.",
     },

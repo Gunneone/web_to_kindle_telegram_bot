@@ -5,7 +5,8 @@ import {
   IconMoon,
   IconSun,
 } from '@tabler/icons-react';
-import { Link, NavLink, Outlet } from 'react-router';
+import { useEffect } from 'react';
+import { Link, NavLink, Outlet, useLocation, useNavigationType } from 'react-router';
 import { useI18n } from '../i18n';
 import { useMe } from '../lib/session';
 import { Brand } from './Brand';
@@ -20,6 +21,12 @@ const SOCIAL = [
 export function Layout() {
   const { t } = useI18n();
   const me = useMe();
+  const { pathname, search } = useLocation();
+  // Signing in from the header comes back to the page it started on
+  const here = pathname + search;
+  const onSignIn = pathname.startsWith('/signin');
+  const signIn = pathname === '/' ? '/signin' : `/signin?next=${encodeURIComponent(here)}`;
+  useScrollToTop();
   return (
     <>
       <a className="g1-skip-link" href="#main">
@@ -33,13 +40,14 @@ export function Layout() {
               <NavLink to="/" end>
                 {t('nav.send')}
               </NavLink>
-              <NavLink to="/history">{t('nav.history')}</NavLink>
+              <NavLink to="/history">{t('nav.library')}</NavLink>
               <NavLink to="/settings">{t('nav.settings')}</NavLink>
             </nav>
           )}
           <div className="g1-header__actions">
-            {!me && (
-              <Link to="/signin" className="g1-btn g1-btn--sm">
+            {/* Not on the sign-in page itself, where it would only lead back to the same page */}
+            {!me && !onSignIn && (
+              <Link to={signIn} className="g1-btn g1-btn--sm">
                 {t('nav.signIn')}
               </Link>
             )}
@@ -63,6 +71,7 @@ export function Layout() {
         <div className="g1-container g1-container--wide">
           <div className="g1-footer__inner">
             <nav className="g1-footer__links" aria-label={t('nav.footer')}>
+              <Link to="/faq">{t('nav.faq')}</Link>
               <Link to="/privacy">{t('nav.privacy')}</Link>
               <a href="https://t.me/SubstackKindleBot" target="_blank" rel="noopener noreferrer">
                 {t('nav.bot')}
@@ -91,4 +100,18 @@ export function Layout() {
       </footer>
     </>
   );
+}
+
+/**
+ * A link to another page opens it at the top, not at the height the last page was scrolled to (the
+ * footer links would otherwise land at the bottom). Back and forward leave it to the browser, and a
+ * link to an anchor (`/faq#…`) to the page it leads to.
+ */
+function useScrollToTop() {
+  const { pathname, hash } = useLocation();
+  const type = useNavigationType();
+  useEffect(() => {
+    if (type !== 'POP' && !hash) window.scrollTo(0, 0);
+    // Only a new page counts: a search in the library changes the query and stays where it is
+  }, [pathname, hash]);
 }

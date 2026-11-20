@@ -14,13 +14,16 @@ from urllib.parse import urlparse
 from core import db, pipeline
 from core.pipeline import Failure, Outcome, Stage
 
+from . import preview
+
 logger = logging.getLogger(__name__)
 
-# In the API the db.TELEGRAM target ("the front end hands the file over") is a download
-DOWNLOAD = 'download'
-TARGETS = {db.KINDLE: db.KINDLE, DOWNLOAD: db.TELEGRAM}
+# The web delivers to the Kindle only; without a target a book is just built, to look at and download.
+# A db.TELEGRAM delivery in the history is a file the bot sent into the Telegram chat.
+TARGETS = {db.KINDLE: db.KINDLE}
 KEEP_FINISHED_SECONDS = 600
-MAX_ACTIVE_PER_USER = 5
+MAX_ACTIVE_PER_USER = 10  # as many links as the bot takes from one message
+MAX_ACTIVE_PER_GUEST = 2
 
 
 @dataclass
@@ -110,7 +113,7 @@ def host(url: str | None) -> str:
     return pipeline.host(url or '')
 
 
-def _iso(value) -> str | None:
+def iso(value) -> str | None:
     return value.isoformat(timespec='seconds') + 'Z' if value else None
 
 
@@ -133,9 +136,9 @@ def serialize(article: db.Article) -> dict:
     else:
         status = article.status or db.SENT  # rows from before the status column were sent
     failure = detail = None
-    delivered: list[str] = []
+    delivered = db.delivered_targets(article)
     if outcome is not None:
-        delivered = sorted(DOWNLOAD if t == db.TELEGRAM else t for t in outcome.delivered)
+        delivered |= outcome.delivered
         if outcome.failure:
             failure = outcome.failure.value
             if outcome.failure in pipeline.USER_FACING and outcome.error:
@@ -148,7 +151,14 @@ def serialize(article: db.Article) -> dict:
         if outcome.failure or outcome.file_too_big:
             status = db.FAILED
     size = file_size(article.epub_path)
+    if outcome is None and status == db.FAILED and size is not None:
+        failure = Failure.EMAIL.value  # built, so it was the delivery that failed (the mail server refused it)
     book = outcome.book if outcome else None
+    words = book.words if book and book.words else article.words
+    if words is None and size is not None and not working:
+        # A book from before the word count was kept: count it once from the EPUB
+        words = preview.word_count(article.epub_path)
+        db.update_article(article.id, words=words)
     return {
         'id': article.id,
         'url': article.article_url,
@@ -156,13 +166,16 @@ def serialize(article: db.Article) -> dict:
         'title': article.title or host(article.article_url),
         'status': status,
         'stage': live.stage.value if working and live.stage else None,
-        'delivered': delivered,
+        # Where it went: 'kindle', 'telegram' (the bot's chat). Empty for a book that only was built, and
+        # for rows from before this was kept (status 'sent' then says it went somewhere, not where)
+        'delivered': sorted(delivered),
         'failure': failure,
         'detail': detail,
-        'created_at': _iso(article.timestamp),
+        'created_at': iso(article.timestamp),
         'size': size,
-        'minutes': book.read_minutes if book else None,
+        'minutes': pipeline.read_minutes(words),
         'paywalled': bool(book.is_preview if book else (article.paywalled or article.status == db.PREVIEW)),
-        # The EPUB can be fetched whenever it exists and isn't being written: also after a failed mail
-        'can_download': size is not None and not working and article.status != db.PROCESSING,
+        # The EPUB can be fetched whenever it exists and isn't being written: also after a failed mail, or
+        # a restart while it was being mailed (the path is only stored once the file is complete)
+        'can_download': size is not None and not working,
     }
